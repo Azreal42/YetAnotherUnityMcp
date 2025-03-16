@@ -1,210 +1,255 @@
 """
-Unity Model Context Protocol (MCP) Server Implementation
-Using the MCP Python SDK to expose Unity functionality to AI
+WebSocket-based Unity Model Context Protocol (MCP) Server
+Provides real-time communication between Unity and AI models
 """
 
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Any, AsyncIterator, Dict, List, Optional
+import asyncio
+import sys
+import uvicorn
+import threading
+from typing import Dict, List, Any, Optional, Callable, NoReturn
+import logging
+from fastapi import FastAPI, WebSocket, Request
+from fastmcp import FastMCP, Context, Image
 
-from mcp.server.fastmcp import Context, FastMCP, Image
-from pydantic import BaseModel
+# Import components
+from server.connection_manager import ConnectionManager
+from server.websocket_handler import websocket_endpoint
 
-# Create the Unity MCP Server
-mcp = FastMCP("Unity MCP")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("mcp_server")
 
+# Create FastMCP and FastAPI instances
+mcp: FastMCP = FastMCP(
+    "Unity MCP WebSocket",
+    description="WebSocket-based Model Context Protocol for Unity Integration",
+    dependencies=["pillow", "websockets"]
+)
 
-# Optional: Define typed context for the server
-@dataclass
-class UnityContext:
-    unity_version: str = "2022.3.16f1"
-    platform: str = "Windows"
-    project_name: str = "MCP Demo"
-    connected: bool = False
+app: FastAPI = FastAPI()
 
+# Store active WebSocket connections
+active_connections: List[WebSocket] = []
 
-# Set up application lifecycle management
-@asynccontextmanager
-async def unity_lifespan(server: FastMCP) -> AsyncIterator[UnityContext]:
-    """Manage Unity connection lifecycle"""
-    # Initialize Unity connection on startup
-    context = UnityContext()
-    print("Connecting to Unity...")
-    # In a real implementation, we would establish a connection to Unity here
-    context.connected = True
-    try:
-        yield context
-    finally:
-        # Cleanup on shutdown
-        print("Disconnecting from Unity...")
-        context.connected = False
+# Store pending requests and their corresponding futures
+pending_requests: Dict[str, asyncio.Future] = {}
 
+# Create connection manager
+manager: ConnectionManager = ConnectionManager()
 
-# Initialize server with lifespan
-mcp = FastMCP("Unity MCP", lifespan=unity_lifespan)
-
-
-# ==== MCP Tools ====
+# Register MCP tools
+from server.mcp_tools import execute_code as _execute_code
+from server.mcp_tools import screen_shot_editor as _screen_shot_editor
+from server.mcp_tools import modify_object as _modify_object
 
 @mcp.tool()
 def execute_code(code: str, ctx: Context) -> str:
-    """Execute C# code in the Unity Editor
-    
+    """Execute C# code in Unity Editor
+
     Args:
-        code: C# code to execute
-        
+        code: The C# code to execute
+
     Returns:
-        Execution result or error message
+        Result of the code execution
     """
-    # This will be implemented to actually execute code in Unity
+    from server.async_utils import AsyncExecutor, AsyncOperation
+    
     try:
-        unity_ctx = ctx.request_context.lifespan_context
-        ctx.info(f"Executing code in Unity {unity_ctx.unity_version}...")
-        return f"Code executed successfully:\n```csharp\n{code}\n```"
+        with AsyncOperation("execute_code", {"code_length": len(code)}, timeout=60.0):
+            # Use our utility to run the coroutine safely across thread boundaries
+            return AsyncExecutor.run_in_thread_or_loop(
+                lambda: _execute_code(code, ctx, manager, pending_requests),
+                timeout=60.0  # 60 second timeout for code execution
+            )
     except Exception as e:
+        ctx.error(f"Error executing code: {str(e)}")
         return f"Error: {str(e)}"
 
-
 @mcp.tool()
-async def screen_shot_editor(output_path: str, width: int = 1920, height: int = 1080, ctx: Context) -> Image:
+def screen_shot_editor(
+    output_path: str = "screenshot.png", 
+    width: int = 1920, 
+    height: int = 1080,
+    ctx: Optional[Context] = None
+) -> Image:
     """Take a screenshot of the Unity Editor
-    
+
     Args:
-        output_path: Where to save the screenshot
+        output_path: Path to save the screenshot
         width: Screenshot width
         height: Screenshot height
-        
-    Returns:
-        Screenshot image
-    """
-    # This will be implemented to actually take screenshots in Unity
-    ctx.info(f"Taking screenshot ({width}x{height}) to {output_path}...")
-    
-    # Generate a placeholder image (in real implementation, this would be from Unity)
-    from PIL import Image as PILImage, ImageDraw
-    
-    img = PILImage.new("RGB", (width, height), color=(30, 30, 30))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle(
-        [(width * 0.1, height * 0.1), (width * 0.9, height * 0.9)],
-        outline=(0, 100, 200),
-        width=5,
-    )
-    draw.text((width / 2 - 100, height / 2), "Unity Editor", fill=(255, 255, 255))
-    
-    return Image(data=img, format="png")
 
+    Returns:
+        Screenshot as an Image
+    """
+    from server.async_utils import AsyncExecutor, AsyncOperation
+    
+    try:
+        with AsyncOperation("screen_shot_editor", {
+            "output_path": output_path,
+            "resolution": f"{width}x{height}"
+        }, timeout=30.0):
+            # Use our utility to run the coroutine safely across thread boundaries
+            return AsyncExecutor.run_in_thread_or_loop(
+                lambda: _screen_shot_editor(output_path, width, height, ctx, manager, pending_requests),
+                timeout=30.0
+            )
+    except Exception as e:
+        if ctx:
+            ctx.error(f"Error taking screenshot: {str(e)}")
+        logger.error(f"Error taking screenshot: {str(e)}")
+        # Return an empty image on error
+        return Image(data=b"", format="png")
 
 @mcp.tool()
-def modify_object(object_id: str, property_name: str, property_value: Any) -> Dict[str, Any]:
+def modify_object(
+    object_id: str, 
+    property_path: str, 
+    property_value: Any,
+    ctx: Optional[Context] = None
+) -> str:
     """Modify a property of a Unity GameObject
-    
+
     Args:
-        object_id: The GameObject identifier
-        property_name: The property to modify
+        object_id: The name or ID of the GameObject
+        property_path: Path to the property (e.g. "position.x" or "GetComponent<Renderer>().material.color")
         property_value: The new value for the property
-        
+
     Returns:
-        Result of the modification operation
+        Result of the object modification
     """
-    # This will be implemented to actually modify objects in Unity
-    return {
-        "success": True,
-        "object_id": object_id,
-        "property": property_name,
-        "new_value": property_value,
-    }
+    from server.async_utils import AsyncExecutor, AsyncOperation
+    
+    try:
+        with AsyncOperation("modify_object", {
+            "object_id": object_id,
+            "property_path": property_path
+        }, timeout=30.0):
+            # Use our utility to run the coroutine safely across thread boundaries
+            return AsyncExecutor.run_in_thread_or_loop(
+                lambda: _modify_object(object_id, property_path, property_value, ctx, manager, pending_requests),
+                timeout=30.0
+            )
+    except Exception as e:
+        if ctx:
+            ctx.error(f"Error modifying object: {str(e)}")
+        logger.error(f"Error modifying object: {str(e)}")
+        return f"Error: {str(e)}"
 
-
-# ==== MCP Resources ====
+# Register MCP resources
+from server.mcp_resources import get_unity_info as _get_unity_info
+from server.mcp_resources import get_logs as _get_logs
+from server.mcp_resources import get_scene as _get_scene
+from server.mcp_resources import get_object as _get_object
 
 @mcp.resource("unity://info")
-def get_unity_info(ctx: Context) -> str:
-    """Get information about the Unity environment"""
-    unity_ctx = ctx.request_context.lifespan_context
-    return f"""
-Unity Version: {unity_ctx.unity_version}
-Platform: {unity_ctx.platform}
-Project: {unity_ctx.project_name}
-Connected: {unity_ctx.connected}
-"""
+def get_unity_info() -> Dict[str, Any]:
+    """Get information about the Unity environment
 
+    Returns:
+        Information about the Unity environment
+    """
+    from server.async_utils import AsyncExecutor
+    
+    try:
+        # Use our utility to run the coroutine safely across thread boundaries
+        return AsyncExecutor.run_in_thread_or_loop(
+            lambda: _get_unity_info(manager, pending_requests),
+            timeout=30.0
+        )
+    except Exception as e:
+        logger.error(f"Error getting Unity info: {str(e)}")
+        return {"error": str(e)}
 
-@mcp.resource("unity://logs")
-def get_logs() -> str:
-    """Get logs from the Unity editor"""
-    # This will be implemented to return real logs from Unity
-    return """
-[10:30:45] [Info] Application started
-[10:30:47] [Info] Scene loaded: SampleScene
-[10:31:02] [Warning] Missing reference in GameObject 'Player'
-"""
+@mcp.resource("unity://logs/{max_logs}")
+def get_logs(max_logs: int = 100) -> List[Dict[str, Any]]:
+    """Get logs from the Unity Editor
 
+    Args:
+        max_logs: Maximum number of logs to return
+
+    Returns:
+        List of log entries
+    """
+    from server.async_utils import AsyncExecutor
+    
+    try:
+        # Use our utility to run the coroutine safely across thread boundaries
+        return AsyncExecutor.run_in_thread_or_loop(
+            lambda: _get_logs(max_logs, manager, pending_requests),
+            timeout=30.0
+        )
+    except Exception as e:
+        logger.error(f"Error getting logs: {str(e)}")
+        return [{"error": str(e)}]
 
 @mcp.resource("unity://scene/{scene_name}")
-def get_scene_info(scene_name: str) -> str:
+def get_scene(scene_name: str) -> Dict[str, Any]:
     """Get information about a specific Unity scene
-    
-    Args:
-        scene_name: The name of the scene to get information about
-    """
-    # This will be implemented to return real scene data from Unity
-    return f"""
-Scene: {scene_name}
-GameObjects: 24
-Lights: 2
-Cameras: 1
-"""
 
+    Args:
+        scene_name: Name of the scene
+
+    Returns:
+        Information about the scene
+    """
+    from server.async_utils import AsyncExecutor
+    
+    try:
+        # Use our utility to run the coroutine safely across thread boundaries
+        return AsyncExecutor.run_in_thread_or_loop(
+            lambda: _get_scene(scene_name, manager, pending_requests),
+            timeout=30.0
+        )
+    except Exception as e:
+        logger.error(f"Error getting scene info: {str(e)}")
+        return {"name": scene_name, "error": str(e)}
 
 @mcp.resource("unity://object/{object_id}")
-def get_object_info(object_id: str) -> str:
+def get_object(object_id: str) -> Dict[str, Any]:
     """Get information about a specific Unity GameObject
-    
+
     Args:
-        object_id: The GameObject identifier
+        object_id: Name or ID of the GameObject
+
+    Returns:
+        Information about the GameObject
     """
-    # This will be implemented to return real object data from Unity
-    return f"""
-GameObject: {object_id}
-Position: (0, 1, 0)
-Rotation: (0, 0, 0, 1)
-Scale: (1, 1, 1)
-Components: Transform, MeshRenderer, BoxCollider
-"""
+    from server.async_utils import AsyncExecutor
+    
+    try:
+        # Use our utility to run the coroutine safely across thread boundaries
+        return AsyncExecutor.run_in_thread_or_loop(
+            lambda: _get_object(object_id, manager, pending_requests),
+            timeout=30.0
+        )
+    except Exception as e:
+        logger.error(f"Error getting object info: {str(e)}")
+        return {"name": object_id, "error": str(e)}
 
+# Define WebSocket endpoint for MCP communication
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket) -> None:
+    await websocket_endpoint(websocket, manager, pending_requests)
 
-# ==== MCP Prompts ====
-
-@mcp.prompt()
-def create_object() -> str:
-    """Prompt template for creating a new GameObject"""
-    return """
-I need to create a new GameObject in Unity.
-
-Please create a GameObject with these specifications:
-- Name: {name}
-- Position: ({x}, {y}, {z})
-- Components: {components}
-
-Use the execute_code tool to create this object.
-"""
-
-
-@mcp.prompt()
-def debug_error() -> str:
-    """Prompt template for debugging an error in Unity"""
-    return """
-I'm getting the following error in Unity:
-
-```
-{error_message}
-```
-
-Please help me diagnose and fix this issue. You can use the unity://logs resource to see more context.
-"""
-
-
-# Run the server directly if executed as a script
 if __name__ == "__main__":
-    mcp.run()
+    # Run MCP in STDIO mode directly
+    print("Starting MCP server with STDIO transport...")
+    try:
+        # Set Windows event loop policy if needed
+        if sys.platform == 'win32':
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        
+        # Start WebSocket server in a separate thread
+        def run_websocket_server():
+            uvicorn.run(app, host="0.0.0.0", port=8080)
+            
+        ws_thread = threading.Thread(target=run_websocket_server)
+        ws_thread.daemon = True
+        ws_thread.start()
+        
+        # Run MCP server with STDIO transport in main thread
+        mcp.run("stdio")
+    except KeyboardInterrupt:
+        print("MCP server stopped")

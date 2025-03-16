@@ -5,50 +5,16 @@ Main application entry point
 
 from fastapi import FastAPI
 import uvicorn
-from typing import Dict, Any, List
+import sys
+import os
 
-from server.api.handlers import router as mcp_router
-
-app = FastAPI(title="Unity MCP Server")
-
-# Include MCP protocol router
-app.include_router(mcp_router)
-
-
-@app.get("/")
-async def root() -> Dict[str, str]:
-    """Root endpoint that returns basic server information"""
-    return {"status": "running", "server": "Unity MCP"}
-
-
-@app.get("/get_unity_infos")
-async def get_unity_infos() -> Dict[str, Any]:
-    """Get information about the connected Unity instance"""
-    # This will be implemented to return real data from Unity
-    return {
-        "unity_version": "2022.3.16f1",
-        "platform": "Windows",
-        "project_name": "MCP Demo",
-    }
-
-
-@app.get("/get_logs")
-async def get_logs() -> List[Dict[str, Any]]:
-    """Get logs from the Unity editor"""
-    # This will be implemented to return real logs from Unity
-    return [
-        {
-            "timestamp": "2023-03-16T10:30:45",
-            "level": "Info",
-            "message": "Application started",
-        }
-    ]
-
+# Import the WebSocket-based MCP server
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from server.mcp_server import app as mcp_app
 
 def start() -> None:
-    """Start the MCP server"""
-    uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=True)
-
+    """Start the WebSocket MCP server"""
+    uvicorn.run("server.websocket_mcp_server:app", host="0.0.0.0", port=8000, reload=True)
 
 if __name__ == "__main__":
     start()

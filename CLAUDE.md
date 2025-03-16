@@ -1,9 +1,13 @@
 # CLAUDE.md - Development Guidelines
 
 ## Project Overview
-YetAnotherUnityMcp implements the Model Context Protocol (MCP) for Unity:
-- Server: Python-based API that communicates with AI models and Unity
-- Plugin: C#-based Unity integration that allows AI to control and inspect Unity
+YetAnotherUnityMcp is a system that bridges the Unity game engine with AI-driven tools using the Model Context Protocol (MCP):
+
+- **Unity MCP Plugin (Client)**: A C# plugin integrated into the Unity Editor that connects to the MCP server via WebSockets
+- **FastMCP Python Server**: A Python application that implements the MCP interface for Unity
+- **MCP Client (AI or External)**: The external entity (such as an AI assistant or testing script) that sends MCP requests
+
+This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents to inspect and control a running Unity scene in a structured, safe manner.
 
 ## Model Context Protocol (MCP)
 We use FastMCP for MCP integration, which provides:
