@@ -1,11 +1,8 @@
-"""Get information about the Unity environment"""
+"""Get information about Unity environment"""
 
-import logging
 from typing import Any, Dict
 from fastmcp import FastMCP, Context
-from server.unity_websocket_client import get_client
-
-logger = logging.getLogger("mcp_tools")
+from server.mcp.unity_client_util import execute_unity_operation
 
 async def get_unity_info(ctx: Context) -> Dict[str, Any]:
     """
@@ -17,49 +14,24 @@ async def get_unity_info(ctx: Context) -> Dict[str, Any]:
     Returns:
         Dictionary containing Unity environment information
     """
-    client = get_client()
-    
-    if not client.connected:
-        ctx.error("Not connected to Unity. Please check the Unity connection")
-        return {"error": "Not connected to Unity"}
-    
     try:
-        ctx.info("Getting Unity environment information...")
-        result = await client.get_unity_info()
+        result = await execute_unity_operation(
+            "Unity info retrieval", 
+            lambda client: client.get_unity_info(),
+            ctx, 
+            "Error getting Unity info"
+        )
         
-        # Parse the result into a dictionary if it's not already
-        if isinstance(result, str):
-            try:
-                import json
-                result = json.loads(result)
-            except:
-                # If parsing fails, return as a simple dictionary
-                return {"info": result}
-        
-        # Ensure the result is a dictionary
-        if not isinstance(result, dict):
+        # Ensure we return a dictionary
+        if isinstance(result, dict):
+            return result
+        else:
+            # Convert to a dictionary if it's not already
             return {"info": str(result)}
-            
-        return result
     except Exception as e:
-        error_msg = f"Error getting Unity info: {str(e)}"
-        ctx.error(error_msg)
-        logger.error(error_msg)
+        ctx.error(f"Error getting Unity info: {str(e)}")
         return {"error": str(e)}
 
 def register_get_unity_info(mcp: FastMCP) -> None:
-    """
-    Register the get_unity_info tool with the MCP instance.
-    
-    Args:
-        mcp: MCP instance
-    """
-    @mcp.tool()
-    async def unity_info(ctx: Context = None) -> Dict[str, Any]:
-        """
-        Get information about the Unity environment.
-        
-        Returns:
-            Dictionary containing Unity environment information
-        """
-        return await get_unity_info(ctx)
+    """Register the get_unity_info tool with the MCP instance"""
+    mcp.tool()(get_unity_info)
