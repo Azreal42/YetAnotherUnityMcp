@@ -4,12 +4,13 @@ import logging
 import json
 from typing import Any, Dict, Optional
 from server.unity_websocket_client import get_client
+from server.connection_manager import get_unity_connection_manager
 
 logger = logging.getLogger("dynamic_invoker")
 
 async def invoke_dynamic_tool(tool_name: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
     """
-    Invoke a dynamically registered tool directly.
+    Invoke a dynamically registered tool directly with automatic reconnection.
     
     Args:
         tool_name: Name of the tool to invoke
@@ -19,30 +20,33 @@ async def invoke_dynamic_tool(tool_name: str, parameters: Optional[Dict[str, Any
         Tool result
     """
     client = get_client()
+    connection_manager = get_unity_connection_manager()
     
+    # Perform connection with retry logic
     if not client.connected:
-        message = "Not connected to Unity. Please check the Unity connection"
-        logger.error(message)
-        try:
-            await client.connect()
-            if not client.connected:
-                raise Exception("Failed to connect to Unity")
-        except Exception as e:
-            logger.error(f"Reconnection failed: {str(e)}")
+        logger.info("Not connected to Unity, attempting to reconnect...")
+        connected = await connection_manager.reconnect()
+        if not connected:
+            message = "Not connected to Unity and reconnection failed. Please check the Unity connection"
+            logger.error(message)
             return {"error": message}
             
-    # Check if the tool exists
-    exists = await client.has_command(tool_name)
-    if not exists:
-        message = f"Tool {tool_name} does not exist in Unity schema"
-        logger.error(message)
-        return {"error": message}
-        
-    # Invoke the tool
-    try:
+    # Create the operation to execute with reconnection
+    async def execute_tool_operation():
+        # Check if the tool exists
+        exists = await client.has_command(tool_name)
+        if not exists:
+            message = f"Tool {tool_name} does not exist in Unity schema"
+            logger.error(message)
+            return {"error": message}
+            
+        # Invoke the tool
         logger.info(f"Invoking dynamic tool {tool_name} with parameters: {json.dumps(parameters or {})}")
-        result = await client.send_command(tool_name, parameters or {})
-        return result
+        return await client.send_command(tool_name, parameters or {})
+    
+    # Execute with reconnection
+    try:
+        return await connection_manager.execute_with_reconnect(execute_tool_operation)
     except Exception as e:
         message = f"Error invoking tool {tool_name}: {str(e)}"
         logger.error(message)

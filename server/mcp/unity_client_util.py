@@ -4,6 +4,7 @@ import logging
 from typing import Any, Callable, TypeVar, Awaitable, Optional, cast
 from fastmcp import Context
 from server.unity_websocket_client import get_client, UnityWebSocketClient
+from server.connection_manager import get_unity_connection_manager
 
 logger = logging.getLogger("unity_client")
 
@@ -16,7 +17,7 @@ async def execute_unity_operation(
     error_prefix: str = "Error"
 ) -> T:
     """
-    Execute an operation with the Unity client with proper error handling.
+    Execute an operation with the Unity client with proper error handling and automatic reconnection.
     
     Args:
         operation_name: Name of the operation for logging
@@ -27,30 +28,18 @@ async def execute_unity_operation(
     Returns:
         Result of the operation
     """
+    # Get the connection manager for automatic reconnection
+    connection_manager = get_unity_connection_manager()
     client = get_client()
     
-    if not client.connected:
-        message = "Not connected to Unity. Please check the Unity connection"
-        ctx.error(message)
-        # This is a hack to satisfy the type system - we're raising an exception
-        # so this return value will never be used
-        default: Any = f"{error_prefix}: {message}"
-        
-        # Try to automatically reconnect before failing
-        try:
-            ctx.info("Attempting to reconnect to Unity...")
-            await client.connect()
-            if client.connected:
-                ctx.info("Successfully reconnected to Unity")
-            else:
-                raise Exception("Reconnection failed")
-        except Exception as e:
-            ctx.error(f"Reconnection failed: {str(e)}")
-            raise Exception(message)
-    
-    try:
+    # Execute with automatic reconnection
+    async def execute_operation():
         ctx.info(f"Executing {operation_name}...")
         return await operation(client)
+    
+    try:
+        # Use the connection manager to execute with automatic reconnection
+        return await connection_manager.execute_with_reconnect(execute_operation)
     except Exception as e:
         error_msg = f"{error_prefix}: {str(e)}"
         ctx.error(error_msg)

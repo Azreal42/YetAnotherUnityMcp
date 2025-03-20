@@ -34,12 +34,16 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
         Empty dictionary for state (not used)
     """
     from server.mcp.dynamic_tools import get_manager
+    from server.connection_manager import get_unity_connection_manager
 
     logger.info("Server starting: initializing Unity WebSocket client...")
     
     try:
+        # Get the connection manager
+        connection_manager = get_unity_connection_manager()
+        
         # Connect to Unity WebSocket server
-        if await connect_to_unity():
+        if await connection_manager.connect():
             logger.info("Unity WebSocket client successfully connected")
             
             # Register dynamic tools from Unity schema
@@ -47,23 +51,26 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
             # from the enclosing scope (global mcp variable defined below)
             dynamic_manager = get_manager(mcp)
             
-            # Register connected event handler for dynamic tool registration
+            # Register connected event handler for dynamic tool registration through the connection manager
             async def connected_callback():
+                logger.info("Connection established, registering dynamic tools...")
                 await register_dynamic_tools(dynamic_manager)
-            unity_client.on("connected", connected_callback)
+            connection_manager.add_connection_listener(connected_callback)
             
             # Initial registration
             await register_dynamic_tools(dynamic_manager)
             
         else:
             logger.warning("Unity WebSocket client failed to connect, MCP functions may not work")
+            logger.info("Auto-reconnection is enabled, the client will try to reconnect automatically")
         
         # Yield to the server (FastMCP will run during this time)
         yield {}
     finally:
         # Clean up when the server stops
         logger.info("Server stopping: disconnecting Unity WebSocket client...")
-        await unity_client.disconnect()
+        connection_manager = get_unity_connection_manager()
+        await connection_manager.disconnect()
         logger.info("Unity WebSocket client disconnected")
 
 async def register_dynamic_tools(dynamic_manager):
@@ -83,6 +90,7 @@ async def register_dynamic_tools(dynamic_manager):
 async def connect_to_unity(url: str = "ws://localhost:8080/") -> bool:
     """
     Connect to Unity WebSocket server.
+    Deprecated: Use the connection manager instead.
     
     Args:
         url: WebSocket server URL
@@ -90,26 +98,11 @@ async def connect_to_unity(url: str = "ws://localhost:8080/") -> bool:
     Returns:
         True if connected, False otherwise
     """
-    try:
-        logger.info(f"Connecting to Unity WebSocket server at {url}...")
-        result = await unity_client.connect()
-        
-        if result:
-            logger.info("Connected to Unity WebSocket server")
-            
-            # Get Unity info as a connection test
-            try:
-                info = await unity_client.get_unity_info()
-                logger.info(f"Unity info: {info}")
-            except Exception as e:
-                logger.error(f"Error getting Unity info: {str(e)}")
-        else:
-            logger.error("Failed to connect to Unity WebSocket server")
-            
-        return result
-    except Exception as e:
-        logger.error(f"Error connecting to Unity: {str(e)}")
-        return False
+    from server.connection_manager import get_unity_connection_manager
+    
+    # Use the connection manager for more robust connection handling
+    connection_manager = get_unity_connection_manager()
+    return await connection_manager.connect(url)
 
 # Create FastMCP instance
 from fastmcp import FastMCP
