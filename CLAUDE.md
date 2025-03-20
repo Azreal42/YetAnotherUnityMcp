@@ -9,22 +9,64 @@ YetAnotherUnityMcp is a system that bridges the Unity game engine with AI-driven
 
 This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents to inspect and control a running Unity scene in a structured, safe manner.
 
-## Code Structure
+## Project Architecture
+The project follows a server-client architecture with Unity hosting a WebSocket server and Python acting as the WebSocket client. The Python client then provides MCP protocol functionality for AI integration.
+
+## File Structure
 The code is organized with a clean separation of components:
 
-- **Unity (Server)**:
-  - `plugin/Scripts/Editor/WebSocket/WebSocketServer.cs`: Core WebSocket server implementation
-  - `plugin/Scripts/Editor/WebSocket/MCPWebSocketServer.cs`: MCP-specific server functionality
-  - `plugin/Scripts/Editor/WebSocket/WebSocketServerMCPWindow.cs`: Server management UI
-  - `plugin/Scripts/Editor/Commands/`: Command implementations (ExecuteCode, TakeScreenshot, etc.)
-  - `plugin/Scripts/Editor/WebSocket/MCPLocalCommandExecutor.cs`: Local command execution without WebSockets
+### Unity Plugin (WebSocket Server)
 
-- **Python (Client)**:
-  - `server/mcp_server.py`: Main client entry point that initializes FastMCP
-  - `server/mcp_client.py`: High-level Unity client
-  - `server/websocket_client.py`: Low-level WebSocket client
-  - `server/mcp/tools/`: MCP tool implementations
-  - `server/mcp/resources/`: MCP resource implementations
+#### Core WebSocket Server
+- `plugin/Scripts/Editor/WebSocket/WebSocketServer.cs`: Core WebSocket server implementation with low-level socket handling
+- `plugin/Scripts/Editor/MCPWebSocketServer.cs`: High-level MCP-specific server with command routing
+- `plugin/Scripts/Editor/MCPWindow.cs`: Editor UI for controlling the server and executing local commands
+- `plugin/Scripts/Editor/MCPMenu.cs`: Menu items for Unity Editor integration
+
+#### Initialization and Configuration
+- `plugin/Scripts/Editor/CommandExecutionMonitor.cs`: Performance monitoring for command execution
+- `plugin/Scripts/Editor/Commands/MCPLocalCommandExecutor.cs`: Local command execution without WebSockets
+
+#### Command Implementations
+- `plugin/Scripts/Editor/Commands/ExecuteCodeCommand.cs`: Execute C# code in Unity
+- `plugin/Scripts/Editor/Commands/TakeScreenshotCommand.cs`: Capture screenshots of the Unity scene
+- `plugin/Scripts/Editor/Commands/ModifyObjectCommand.cs`: Modify Unity GameObject properties
+- `plugin/Scripts/Editor/Commands/GetLogsCommand.cs`: Retrieve Unity console logs
+- `plugin/Scripts/Editor/Commands/GetUnityInfoCommand.cs`: Get Unity environment information
+
+#### Message Models
+- `plugin/Scripts/Editor/WebSocket/WebSocketMessages.cs`: Message types and serialization for WebSocket communication
+- `plugin/Scripts/Editor/Models/MCPModels.cs`: Data models for MCP protocol
+
+### Python MCP Client
+
+#### Server and Client Core
+- `server/mcp_server.py`: Main MCP server entry point that initializes FastMCP with connection lifecycle management
+- `server/unity_websocket_client.py`: High-level Unity client that provides direct access to Unity operations
+- `server/websocket_client.py`: Low-level WebSocket client implementation
+
+#### Utility Components
+- `server/mcp/unity_client_util.py`: Utility functions for Unity WebSocket operations with error handling
+
+#### MCP Tools (Actions AI Can Take)
+- `server/mcp/tools/__init__.py`: Tool initialization and registration
+- `server/mcp/tools/execute_code.py`: Execute C# code in Unity
+- `server/mcp/tools/take_screenshot.py`: Capture screenshots and return as Image objects
+- `server/mcp/tools/modify_object.py`: Change GameObject properties at runtime
+- `server/mcp/tools/get_logs.py`: Get Unity console logs
+- `server/mcp/tools/get_unity_info.py`: Get Unity environment information
+
+#### MCP Resources (Data Sources for AI)
+- `server/mcp/resources/__init__.py`: Resource initialization and registration
+- `server/mcp/resources/unity_info.py`: Retrieves Unity environment information
+- `server/mcp/resources/unity_logs.py`: Retrieves console logs
+- `server/mcp/resources/unity_object.py`: Accesses GameObject information
+- `server/mcp/resources/unity_scene.py`: Provides scene hierarchy information
+
+#### Testing
+- `tests/test_api.py`: API tests for the MCP functionality
+- `tests/test_mcp_server.py`: Tests for the MCP server
+- `tests/test_async_utils.py`: Tests for async utilities
 
 ## Model Context Protocol (MCP)
 We use FastMCP for MCP integration, which provides:
@@ -64,39 +106,86 @@ fastmcp install server/mcp_server.py -e UNITY_URL=ws://localhost:8080/ # With en
 ```
 
 ## MCP Implementation
-Our client implements the MCP specification with:
-- Tools: `execute_code_in_unity`, `unity_screenshot`, etc. as functions AI can call
-- Resources: Scene hierarchy, GameObject properties as data sources
-- Prompts: Pre-defined templates for common Unity operations
-- Context: Passing context information through the Context object
+Our MCP implementation consists of several key components:
+
+### Server (Unity)
+- **WebSocket Server**: Core communication layer for receiving commands
+- **Command Processing**: Converting incoming messages to Unity actions
+- **Response Serialization**: Converting Unity objects to serializable responses
+- **Auto-Start**: Automatic WebSocket server initialization on Unity Editor start
+- **Performance Monitoring**: Tracking command execution times and metrics
+
+### Client (Python)
+- **WebSocket Client**: Connection management to Unity WebSocket server
+- **Tools**: Functions AI can call like `execute_code_in_unity`, `take_screenshot`
+- **Resources**: Data sources like `unity://info`, `unity://scene` for AI to access
+- **Connection Lifecycle**: Automatic connection management via FastMCP lifespan
+- **Error Handling**: Standardized error handling across all operations
+- **Context**: Passing context information through the FastMCP Context object
+
+### Communication Protocol
+- **Request-Response Pattern**: Each command has a unique ID for tracking
+- **JSON Serialization**: All messages are serialized as JSON
+- **Command Structure**: Commands include parameters and metadata
+- **Response Structure**: Responses include results, errors, and timing information
 
 ## FastMCP Examples
 ```python
 # Create an MCP server with connection to Unity
 from fastmcp import FastMCP, Context, Image
-from server.mcp_client import get_client
+from contextlib import asynccontextmanager
+from server.unity_websocket_client import get_client
 
-mcp = FastMCP("Unity MCP", dependencies=["pillow", "websockets"])
-unity_client = get_client("ws://localhost:8080/")
+# Setup lifespan management for connection lifecycle
+@asynccontextmanager
+async def server_lifespan(server):
+    # Initialize Unity client
+    unity_client = get_client("ws://localhost:8080/")
+    try:
+        # Connect when server starts
+        await unity_client.connect()
+        yield {}  # Server runs during this time
+    finally:
+        # Disconnect when server stops
+        await unity_client.disconnect()
+
+# Create FastMCP instance with lifespan manager
+mcp = FastMCP(
+    "Unity MCP", 
+    dependencies=["pillow", "websockets"],
+    lifespan=server_lifespan
+)
+
+# Utility for standardized client access and error handling
+async def execute_unity_operation(operation_name, operation, ctx):
+    client = get_client()
+    if not client.connected:
+        await client.connect()
+    try:
+        ctx.info(f"Executing {operation_name}...")
+        return await operation(client)
+    except Exception as e:
+        ctx.error(f"Error: {str(e)}")
+        raise
 
 # Add a tool that AI can call
 @mcp.tool()
 async def execute_code_in_unity(code: str, ctx: Context) -> str:
     """Execute C# code in Unity"""
-    # Connect to Unity if not connected
-    if not unity_client.connected:
-        await unity_client.connect()
-    # Execute the code through the client
-    result = await unity_client.execute_code(code)
-    return result
+    try:
+        result = await execute_unity_operation(
+            "code execution",
+            lambda client: client.execute_code(code),
+            ctx
+        )
+        return str(result)
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 # Add a resource AI can access
 @mcp.resource("unity://scene/{scene_name}")
-async def get_scene(scene_name: str) -> str:
+async def get_scene(scene_name: str, ctx: Context) -> dict:
     """Get information about a specific Unity scene"""
-    # Connect to Unity if needed
-    if not unity_client.connected:
-        await unity_client.connect()
     # Use custom C# code to get scene info
     code = f"""
         // C# code to get scene info
@@ -105,24 +194,70 @@ async def get_scene(scene_name: str) -> str:
         // Fill result dictionary with scene info
         return JsonConvert.SerializeObject(result);
     """
-    result = await unity_client.execute_code(code)
-    return result
+    try:
+        result = await execute_unity_operation(
+            "scene retrieval",
+            lambda client: client.execute_code(code),
+            ctx
+        )
+        # Parse JSON result into dictionary
+        import json
+        return json.loads(result) if isinstance(result, str) else result
+    except Exception as e:
+        return {"error": str(e)}
 ```
 
 ## Running the System
 
+### Setup and Installation
+
+1. **Unity Plugin Installation**:
+   - Copy the `plugin` directory into your Unity project's `Assets` directory
+   - Wait for Unity to import all assets and compile scripts
+   - The plugin will automatically register itself in the Unity Editor menu
+
+2. **Python Client Installation**:
+   ```bash
+   cd server
+   python -m pip install -e ".[dev]"
+   ```
+
+3. **Configure Claude Desktop (Optional)**:
+   ```bash
+   fastmcp install server/mcp_server.py --name "Unity Controller"
+   ```
+
+### Starting the System
+
 1. **Start the Unity WebSocket Server**:
    - Open the Unity Editor with the plugin imported
-   - Start the server from MCP > WebSocket Server > Start Server
-   - You can also use Window > WebSocket MCP Server to start the server
+   - The server can auto-start if enabled (default behavior)
+   - Manual start: MCP > Server > Start Server
+   - UI control panel: Window > MCP Server
 
 2. **Run the Python MCP Client**:
    - Start the client with `python -m server.mcp_server`
-   - Or use FastMCP: `fastmcp dev server/mcp_server.py`
+   - For development: `fastmcp dev server/mcp_server.py`
+   - The client will automatically attempt to connect to Unity
 
 3. **Use from Claude Desktop**:
-   - Install in Claude Desktop with `fastmcp install server/mcp_server.py`
-   - Use from Claude: `/mcp add unity-mcp`
+   - In Claude: `/mcp add unity-mcp`
+   - Then use tools like: 
+     ```
+     /mcp run unity-mcp execute_code_in_unity --code "Debug.Log(\"Hello from Claude!\");"
+     ```
+   - Or get resources:
+     ```
+     /mcp get unity-mcp unity://info
+     ```
+
+### Communication Flow
+
+1. AI (or user) makes a request to the Python MCP client
+2. Python client translates this to a WebSocket message
+3. Unity server receives the message and executes the requested command
+4. Unity sends the result back to the Python client
+5. Python client formats the result and returns it to the AI
 
 ## Code Style Guidelines
 - **Python**:
