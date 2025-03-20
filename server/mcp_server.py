@@ -48,7 +48,9 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
             dynamic_manager = get_manager(mcp)
             
             # Register connected event handler for dynamic tool registration
-            unity_client.on("connected", lambda: register_dynamic_tools(dynamic_manager))
+            async def connected_callback():
+                await register_dynamic_tools(dynamic_manager)
+            unity_client.on("connected", connected_callback)
             
             # Initial registration
             await register_dynamic_tools(dynamic_manager)
