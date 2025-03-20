@@ -7,7 +7,7 @@ import json
 from server.unity_websocket_client import get_client
 from server.mcp.dynamic_tools import DynamicToolManager
 from server.mcp.dynamic_tool_invoker import invoke_dynamic_tool
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 # Import components
+from server.mcp.dynamic_tools import DynamicToolManager
 from server.unity_websocket_client import UnityWebSocketClient, get_client
 
 # Configure logging
@@ -33,12 +34,12 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     Yields:
         Empty dictionary for state (not used)
     """
-    from server.mcp.dynamic_tools import get_manager
-    from server.connection_manager import get_unity_connection_manager
-
     logger.info("Server starting: initializing Unity WebSocket client...")
     
     try:
+        from server.mcp.dynamic_tools import get_manager
+        from server.connection_manager import get_unity_connection_manager
+
         # Get the connection manager
         connection_manager = get_unity_connection_manager()
         
@@ -73,7 +74,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
         await connection_manager.disconnect()
         logger.info("Unity WebSocket client disconnected")
 
-async def register_dynamic_tools(dynamic_manager):
+async def register_dynamic_tools(dynamic_manager: DynamicToolManager):
     """
     Register dynamic tools from Unity schema.
     
@@ -109,12 +110,8 @@ async def connect_to_unity(url: str = "ws://localhost:8080/") -> bool:
 mcp: FastMCP = FastMCP(
     "Unity MCP WebSocket Client",
     description="WebSocket-based Model Context Protocol for Unity Integration (Client Mode)",
-    dependencies=["pillow", "websockets"],
     lifespan=server_lifespan  # Use our lifespan manager
 )
-
-# Initialize and register MCP tools and resources
-init_mcp(mcp)
 
 def main() -> None:
     """
