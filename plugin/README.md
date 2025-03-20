@@ -1,60 +1,99 @@
 # Unity MCP Plugin
 
-This Unity plugin allows communication between Unity and the Model Context Protocol (MCP) server, enabling AI agents to control and interact with Unity.
+This Unity plugin implements a WebSocket server that allows AI agents to control and interact with Unity using the Model Context Protocol (MCP).
 
 ## Installation
 
 1. Import the plugin into your Unity project
-2. Add the MCPClient component to a GameObject in your scene (or use the provided prefab)
-3. Configure the server URL and other settings in the inspector
+2. Open the WebSocket Server window from the menu: `Window > WebSocket MCP Server`
+3. Start the server using the "Start Server" button
+4. Connect to the server from the Python MCP client
 
 ## Usage
 
-### Editor Window
+### WebSocket Server Window
 
-The plugin includes an editor window for testing and debugging. Open it from the menu:
+The plugin includes a server window for managing and monitoring WebSocket connections. Open it from the menu:
+
+```
+Window > WebSocket MCP Server
+```
+
+This window allows you to:
+- Start and stop the WebSocket server
+- View connected clients
+- Monitor message traffic
+- Configure server options (host, port)
+
+### Local Client Window
+
+For testing without connecting to the Python client, you can use the local client window:
 
 ```
 Window > MCP Client
 ```
 
-### Runtime API
+This window allows you to execute commands directly within Unity:
+- Execute C# code
+- Take screenshots
+- Modify GameObject properties
+- Get Unity information and logs
 
-You can use the MCPClient API in your own scripts:
+### Server API
+
+You can use the MCPWebSocketServer API in your own scripts:
 
 ```csharp
-// Get the MCP client
-MCPClient client = MCPClient.Instance;
+// Get the server instance
+MCPWebSocketServer server = MCPWebSocketServer.Instance;
 
-// Execute code
-string result = await client.ExecuteCode("Debug.Log(\"Hello from MCP!\");");
+// Start the server
+await server.StartAsync("localhost", 8080);
 
-// Take a screenshot
-StartCoroutine(client.TakeScreenshot("Assets/screenshot.png"));
+// Send a message to a specific client
+await server.SendMessageAsync(clientId, messageObject);
 
-// Modify an object
-string result = await client.ModifyObject("MainCamera", "position.x", 10f);
+// Broadcast a message to all clients
+await server.BroadcastMessageAsync(messageObject);
 
-// Get logs
-string logs = await client.GetLogs();
+// Stop the server
+await server.StopAsync();
 
-// Get Unity info
-string info = await client.GetUnityInfo();
+// Subscribe to events
+server.OnServerStarted += HandleServerStarted;
+server.OnClientConnected += HandleClientConnected;
+server.OnMessageReceived += HandleMessageReceived;
+```
+
+### Local Execution API
+
+You can use the MCPLocalCommandExecutor for direct command execution without WebSockets:
+
+```csharp
+// Get the local command executor
+MCPLocalCommandExecutor executor = MCPLocalCommandExecutor.Instance;
+
+// Execute a command
+string result = executor.ExecuteCommand("execute_code", new Dictionary<string, object>
+{
+    { "code", "Debug.Log(\"Hello from MCP!\");" }
+});
 ```
 
 ## Features
 
+- WebSocket server for handling connections from MCP clients
+- Local command execution for testing without a client
 - Execute C# code in the Unity Editor
 - Take screenshots of the Unity Editor
 - Modify GameObject properties
 - Access logs and Unity information
-- Editor window for testing and debugging
+- Server monitoring and management window
 
 ## Requirements
 
 - Unity 2020.3 or later
 - .NET 4.x Scripting Runtime
-- MCP server running (see the server/ directory in the main project)
 
 ## License
 

@@ -13,8 +13,8 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
         /// <summary>
         /// Process the message on the main thread
         /// </summary>
-        /// <param name="client">The WebSocketClient that received this message</param>
-        void Process(WebSocketClient client);
+        /// <param name="server">The WebSocketServer that received this message</param>
+        void Process(WebSocketServer server);
     }
 
     /// <summary>
@@ -42,20 +42,19 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             }
         }
         
-        public void Process(WebSocketClient client)
+        public void Process(WebSocketServer server)
         {
-            // Calculate latency if server timestamp is present
-            if (ParsedContent.TryGetValue("server_timestamp", out var timestampObj) && timestampObj != null)
+            // Calculate latency if client timestamp is present
+            if (ParsedContent.TryGetValue("client_timestamp", out var timestampObj) && timestampObj != null)
             {
                 try
                 {
-                    long serverTimestamp = Convert.ToInt64(timestampObj);
-                    long latency = ReceivedTimestamp - serverTimestamp;
+                    long clientTimestamp = Convert.ToInt64(timestampObj);
+                    long latency = ReceivedTimestamp - clientTimestamp;
                     
-                    string messageType = ParsedContent.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : "unknown";
-                    string action = ParsedContent.TryGetValue("action", out var actionObj) ? actionObj?.ToString() : "unknown";
+                    string command = ParsedContent.TryGetValue("command", out var cmdObj) ? cmdObj?.ToString() : "unknown";
                     
-                    Debug.Log($"[WebSocket] Message received - Latency: {latency}ms, Type: {messageType}, Action: {action}, Size: {JsonContent.Length} bytes");
+                    Debug.Log($"[WebSocket Server] Message received - Latency: {latency}ms, Command: {command}, Size: {JsonContent.Length} bytes");
                 }
                 catch
                 {
@@ -66,9 +65,6 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             {
                 LogMessageContent();
             }
-            
-            // Invoke the message received event
-            client.InvokeMessageReceived(JsonContent);
         }
         
         private void LogMessageContent()
@@ -76,11 +72,11 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             // Log message content with length limit
             if (JsonContent.Length < 500)
             {
-                Debug.Log($"[WebSocket] Message received: {JsonContent}");
+                Debug.Log($"[WebSocket Server] Message received: {JsonContent}");
             }
             else
             {
-                Debug.Log($"[WebSocket] Message received: {JsonContent.Substring(0, 100)}... (truncated, {JsonContent.Length} bytes)");
+                Debug.Log($"[WebSocket Server] Message received: {JsonContent.Substring(0, 100)}... (truncated, {JsonContent.Length} bytes)");
             }
         }
     }
@@ -97,10 +93,9 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             ErrorMessage = errorMessage;
         }
         
-        public void Process(WebSocketClient client)
+        public void Process(WebSocketServer server)
         {
-            Debug.LogError($"[WebSocket] Error: {ErrorMessage}");
-            client.InvokeError(ErrorMessage);
+            Debug.LogError($"[WebSocket Server] Error: {ErrorMessage}");
         }
     }
 
@@ -110,29 +105,29 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
     public class WebSocketDisconnectMessage : IWebSocketMessage
     {
         public string Reason { get; }
+        public string ConnectionId { get; }
         
-        public WebSocketDisconnectMessage(string reason = "")
+        public WebSocketDisconnectMessage(string reason = "", string connectionId = null)
         {
             Reason = reason;
+            ConnectionId = connectionId;
         }
         
-        public void Process(WebSocketClient client)
+        public void Process(WebSocketServer server)
         {
             if (!string.IsNullOrEmpty(Reason))
             {
-                Debug.Log($"[WebSocket] Disconnected: {Reason}");
+                Debug.Log($"[WebSocket Server] Disconnected: {Reason}");
             }
             else
             {
-                Debug.Log("[WebSocket] Disconnected");
+                Debug.Log("[WebSocket Server] Disconnected");
             }
-            
-            client.InvokeDisconnected();
         }
     }
 
     /// <summary>
-    /// Status update message for logging internal WebSocket client status
+    /// Status update message for logging internal WebSocket server status
     /// </summary>
     public class WebSocketStatusMessage : IWebSocketMessage
     {
@@ -145,18 +140,18 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             LogLevel = logLevel;
         }
         
-        public void Process(WebSocketClient client)
+        public void Process(WebSocketServer server)
         {
             switch (LogLevel)
             {
                 case LogType.Error:
-                    Debug.LogError($"[WebSocket] {Status}");
+                    Debug.LogError($"[WebSocket Server] {Status}");
                     break;
                 case LogType.Warning:
-                    Debug.LogWarning($"[WebSocket] {Status}");
+                    Debug.LogWarning($"[WebSocket Server] {Status}");
                     break;
                 default:
-                    Debug.Log($"[WebSocket] {Status}");
+                    Debug.Log($"[WebSocket Server] {Status}");
                     break;
             }
         }

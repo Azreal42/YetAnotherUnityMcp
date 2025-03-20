@@ -3,22 +3,22 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
-namespace YetAnotherUnityMcp.Editor.WebSocket
+namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
     /// Monitor and report performance metrics for WebSocket communication
     /// </summary>
-    public class WebSocketPerformanceMonitor
+    public class CommandExecutionMonitor
     {
         // Singleton instance
-        private static WebSocketPerformanceMonitor _instance;
-        public static WebSocketPerformanceMonitor Instance
+        private static CommandExecutionMonitor _instance;
+        public static CommandExecutionMonitor Instance
         {
             get
             {
                 if (_instance == null)
                 {
-                    _instance = new WebSocketPerformanceMonitor();
+                    _instance = new CommandExecutionMonitor();
                 }
                 return _instance;
             }
@@ -122,10 +122,10 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
         public class OperationTimer : IDisposable
         {
             private string _operationName;
-            private WebSocketPerformanceMonitor _monitor;
+            private CommandExecutionMonitor _monitor;
             private float _startTimeMs;
             
-            public OperationTimer(string operationName, WebSocketPerformanceMonitor monitor)
+            public OperationTimer(string operationName, CommandExecutionMonitor monitor)
             {
                 _operationName = operationName;
                 _monitor = monitor;

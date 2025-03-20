@@ -1,62 +1,55 @@
-"""Execute code MCP tool implementation"""
+"""Execute C# code in Unity"""
 
 import logging
-import asyncio
-from typing import Any, Dict
-from fastmcp import Context
-from server.websocket_utils import send_request
-from server.async_utils import AsyncOperation, AsyncExecutor
+from typing import Any
+from fastmcp import FastMCP, Context
+from server.mcp_client import get_client
 
-logger = logging.getLogger("mcp_server")
+logger = logging.getLogger("mcp_tools")
 
-def execute_code_handler(code: str, ctx: Context) -> str:
-    """Execute C# code in Unity Editor
-
+async def execute_code(code: str, ctx: Context) -> str:
+    """
+    Execute C# code in Unity.
+    
     Args:
-        code: The C# code to execute
-
+        code: C# code to execute
+        ctx: MCP context
+        
     Returns:
         Result of the code execution
     """
+    client = get_client()
+    
+    if not client.connected:
+        ctx.error("Not connected to Unity. Please check the Unity connection")
+        return "Error: Not connected to Unity"
+    
     try:
-        with AsyncOperation("execute_code", {"code_length": len(code)}, timeout=60.0):
-            # Use our utility to run the coroutine safely across thread boundaries
-            return AsyncExecutor.run_in_thread_or_loop(
-                lambda: execute_code(code, ctx),
-                timeout=60.0  # 60 second timeout for code execution
-            )
+        ctx.info(f"Executing code in Unity...")
+        result = await client.execute_code(code)
+        return str(result)
     except Exception as e:
-        ctx.error(f"Error executing code: {str(e)}")
+        error_msg = f"Error executing code: {str(e)}"
+        ctx.error(error_msg)
+        logger.error(error_msg)
         return f"Error: {str(e)}"
 
-async def execute_code(
-    code: str, 
-    ctx: Context
-) -> str:
-    """Execute C# code in Unity Editor implementation"""
-    from server.mcp_server import manager, pending_requests
+def register_execute_code(mcp: FastMCP) -> None:
+    """
+    Register the execute_code tool with the MCP instance.
     
-    with AsyncOperation("execute_code_impl", {"code_length": len(code)}, timeout=60.0) as op:
-        ctx.info(f"Executing code of length {len(code)}")
+    Args:
+        mcp: MCP instance
+    """
+    @mcp.tool()
+    async def execute_code_in_unity(code: str, ctx: Context) -> str:
+        """
+        Execute C# code in Unity.
         
-        try:
-            if manager.active_connections:
-                response: Dict[str, Any] = await send_request(manager, "execute_code", {"code": code}, pending_requests)
-                if response.get("status") == "error":
-                    return f"Error: {response.get('error')}"
-                
-                result: Dict[str, Any] = response.get("result", {})
-                output: str = result.get("output", "")
-                logs: list = result.get("logs", [])
-                return_value: Any = result.get("returnValue")
-                
-                # Get processing time if available
-                server_time = response.get("server_processing_time_ms", 0)
-                
-                # Build the response with timing information
-                return f"Output: {output}\nLogs: {', '.join(logs)}\nReturn: {return_value}\nServer processing time: {server_time}ms"
-            else:
-                return "No Unity clients connected to execute code"
-        except Exception as e:
-            ctx.error(f"Error executing code: {str(e)}")
-            return f"Error: {str(e)}"
+        Args:
+            code: C# code to execute
+            
+        Returns:
+            Result of the code execution
+        """
+        return await execute_code(code, ctx)

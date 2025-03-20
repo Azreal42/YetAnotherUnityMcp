@@ -2,79 +2,73 @@
 
 ## System Architecture 
 
-The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem:
+The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem. The key difference from traditional MCP setups is that Unity acts as the WebSocket server rather than the client.
 
-### Unity Plugin Structure
+### Unity Server Structure
 
 The Unity side is implemented as a typical Unity plugin with separate editor code. All functionality resides in the **Editor** scripts, which are only used in the Unity Editor. The core components on the Unity side are:
 
-1. **MCPConnection**: A static class that manages connection to the MCP server via WebSockets.
-2. **WebSocketClient**: Handles low-level WebSocket communication.
-3. **MCPWebSocketManager**: Manages the WebSocket client and provides high-level API for communication.
+1. **WebSocketServer**: Manages WebSocket connections, provides events for connection management, and message routing.
+2. **MCPWebSocketServer**: High-level manager for the WebSocket server with MCP-specific functionality.
+3. **WebSocketServerMCPWindow**: Editor window for managing and monitoring the server.
 4. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
-5. **MCPWindow and WebSocketMCPWindow**: Editor windows for testing and debugging.
+5. **WebSocketMessages**: Message types for handling communication (requests, responses, errors).
 
-### Python MCP Server Structure
+### Python Client Structure
 
-The Python server uses the FastMCP framework to define the available actions and data endpoints in an organized way. Key components include:
+The Python client uses the FastMCP framework to define the available actions and data endpoints in an organized way. Key components include:
 
 1. **mcp_server.py**: The main MCP server implementation using FastMCP.
-2. **websocket_mcp_server.py**: The WebSocket-based MCP server.
-3. **models/unity.py**: Data models for Unity objects.
-4. **api/handlers.py**: API endpoints for the traditional HTTP server.
+2. **mcp_client.py**: The high-level client for communicating with Unity.
+3. **websocket_client.py**: The low-level WebSocket client implementation.
+4. **mcp/tools/**: Tool implementations for MCP.
+5. **mcp/resources/**: Resource implementations for MCP.
 
-The server can run in two modes:
-- **MCP mode**: Using FastMCP's built-in server (via `fastmcp run` or an MCP-enabled FastAPI app).
-- **WebSocket mode**: A dedicated WebSocket server for real-time communication.
+The client can run in two modes:
+- **MCP mode**: Using FastMCP's built-in server with STDIO transport (via `fastmcp run` or an MCP-enabled FastAPI app).
+- **Direct mode**: A direct WebSocket client connection to Unity for testing and development.
 
 ## Communication Protocol (WebSockets & JSON)
 
-All communication between the Unity plugin and the Python server uses a **WebSocket** connection, which allows persistent, low-latency bidirectional messaging. This avoids constant polling and enables the server to push commands to Unity instantly whenever an AI makes a request.
+All communication between the Unity server and the Python client uses a **WebSocket** connection, which allows persistent, low-latency bidirectional messaging. This avoids constant polling and enables real-time communication between Unity and Python.
 
 ### Message Format
 
-Every message is a JSON object containing at least a **message type**, a **unique ID** (to pair requests with responses), and a **payload**. We define two primary message types:
+Every message is a JSON object containing at least a **command or response type**, a **unique ID** (to pair requests with responses), and **parameters or result object**. We define two primary message types:
 
-#### Request
+#### Command Request
 
-Sent from the Python server to Unity to command an action or query data. It contains an `action` (or resource identifier) and any parameters needed. For example: 
+Sent from the Python client to Unity to request an action. It contains a `command` name and any parameters needed. For example: 
 
 ```json
 {
-  "id": "req-101",
-  "type": "request",
-  "action": "execute_code",
-  "payload": {
+  "id": "req_101",
+  "command": "execute_code",
+  "parameters": {
     "code": "Debug.Log(\"Hello from AI\");"
-  }
+  },
+  "client_timestamp": 1710956378123
 }
 ```
 
-This asks Unity to execute a snippet of C# code. Another example could be a resource query: 
+This asks Unity to execute a snippet of C# code.
+
+#### Command Response
+
+Sent from Unity back to the client as a reply to a request. It echoes the same `id` and contains either a result or an error. For a successful response, we use `status: "success"` and include the `result` data. For errors, `status: "error"` and an `error` message field are used.
 
 ```json
 {
-  "id": "req-102",
-  "type": "request",
-  "action": "unity://scene/Level1",
-  "payload": {}
-}
-```
-
-#### Response
-
-Sent from Unity back to the server as a reply to a request. It echoes the same `id` and contains either a result or an error. For a successful response, we use `status: "success"` and include the `result` data. For errors, `status: "error"` and an `error` message field are used.
-
-```json
-{
-  "id": "req-101",
+  "id": "req_101",
   "type": "response",
   "status": "success",
   "result": {
     "output": "Hello from AI", 
     "logs": ["Hello from AI"], 
     "returnValue": null
-  }
+  },
+  "server_timestamp": 1710956378456,
+  "client_timestamp": 1710956378123
 }
 ```
 
@@ -82,90 +76,112 @@ For errors:
 
 ```json
 {
-  "id": "req-101",
+  "id": "req_101",
   "type": "response",
   "status": "error",
-  "error": "NullReferenceException at line 1 ..."
+  "error": "NullReferenceException at line 1 ...",
+  "server_timestamp": 1710956378456,
+  "client_timestamp": 1710956378123
 }
 ```
 
 ### Image Data
 
-For commands that produce image data (such as a screenshot capture tool), the Unity plugin can transmit images using base64 encoding within JSON:
+For commands that produce image data (such as a screenshot capture tool), the Unity server can transmit images using file paths or base64 encoding within JSON:
 
 ```json
 {
-  "id": "req-103",
+  "id": "req_103",
   "type": "response",
   "status": "success",
   "result": {
-    "image": "<base64-encoded-data>",
-    "format": "png",
+    "filePath": "/path/to/screenshot.png",
     "width": 1280,
     "height": 720
-  }
+  },
+  "server_timestamp": 1710956379456,
+  "client_timestamp": 1710956379123
 }
 ```
 
-### Supported Messages (Tools & Resources)
+### Supported Commands
 
-By default, the system defines a set of actions that the Unity plugin will recognize and handle:
-
-#### Tools (actions Unity can perform)
+By default, the system defines a set of commands that the Unity server will recognize and handle:
 
 - `execute_code`: Execute an arbitrary C# code snippet in the Unity environment.
-- `screen_shot_editor`: Capture a screenshot of the current Unity Editor view.
+- `take_screenshot`: Capture a screenshot of the current Unity Editor view.
 - `modify_object`: Modify properties of a Unity GameObject.
-
-#### Resources (data Unity can provide)
-
-- `unity://info`: General information about the Unity environment.
-- `unity://logs`: Recent Unity console logs.
-- `unity://scene/{sceneName}`: Detailed information about a scene.
-- `unity://object/{objectId}`: Detailed information about a specific object.
+- `get_logs`: Get recent Unity console logs.
+- `get_unity_info`: Get information about the Unity environment.
 
 ## WebSocket Implementation Details
 
-The WebSocket implementation has the following components:
+### Unity WebSocket Server
 
-1. **WebSocketClient**: Low-level client that handles WebSocket connection, message sending/receiving, and disconnection. It uses .NET's `ClientWebSocket` class, which is part of the standard library.
+The Unity WebSocket server has the following components:
 
-2. **MCPWebSocketManager**: Manages the WebSocket client and provides higher-level API:
-   - Automatic JSON serialization/deserialization
-   - Request-response mapping using unique IDs
-   - Timeout handling for requests
-   - Async/await interface for Unity
+1. **WebSocketServer**: Core server implementation that handles:
+   - Managing client connections
+   - Message routing
+   - Thread-safe message queue for processing on the main thread
+   - Performance monitoring
+   - Error handling and logging
 
-3. **MCPConnection**: A static class that provides the main interface for the plugin:
-   - Automatically converts HTTP URLs to WebSocket URLs
-   - Provides fallback to local command execution when disconnected
-   - Exposes simple methods for each supported command
+2. **MCPWebSocketServer**: High-level manager that provides:
+   - Command processing for MCP tools
+   - JSON serialization/deserialization
+   - Client tracking with connection information
+   - Logging and monitoring functions
+   - Interface for other Unity scripts to use
 
-## Error Handling & Fallbacks
+3. **WebSocketServerMCPWindow**: Editor window that provides:
+   - Server controls (start/stop)
+   - Connected client list
+   - Message log for debugging
+   - Status information
 
-The system is designed to handle errors gracefully:
+### Python WebSocket Client
 
-1. **Connection Errors**: The WebSocket client attempts to reconnect if the connection is lost. The MCPConnection class provides feedback through events that the UI can subscribe to.
+The Python client implementation includes:
 
-2. **Message Timeouts**: If a request doesn't receive a response within a configurable time, it will throw a timeout exception that the caller can handle.
+1. **WebSocketClient**: Low-level client that handles:
+   - Connection to Unity server
+   - Message sending/receiving
+   - Event-based communication (connected, disconnected, message, error)
+   - Async/await interface for Python
 
-3. **Local Fallback**: When not connected to a server, the MCPConnection can execute commands locally using the Command classes. This ensures that the plugin can still be used even without a server.
+2. **MCPClient**: High-level client that provides:
+   - Higher-level APIs for Unity commands (execute_code, take_screenshot, etc.)
+   - Callback registration for status events
+   - Error handling and logging
 
-4. **JSON Validation**: All messages are validated for proper format and content. Invalid messages are rejected with appropriate error responses.
+## Error Handling & Security
+
+The system is designed to handle errors gracefully and maintain security:
+
+1. **Connection Handling**: Both server and client handle connection errors gracefully with appropriate logging and notifications.
+
+2. **Message Validation**: All messages are validated for proper format and content.
+
+3. **Thread Safety**: The Unity server processes all WebSocket messages on the main Unity thread to ensure thread safety.
+
+4. **Timeout Handling**: Command execution has timeouts to prevent hanging operations.
+
+5. **Connection Monitoring**: Performance metrics are tracked and logged for monitoring connection health.
 
 ## Extensibility
 
 The system is designed to be extensible:
 
-1. **Adding New Commands**: To add a new command, you need to:
-   - Add a new Command class in the Editor/Commands folder
-   - Implement the command logic
-   - Add handling in the MCPConnection class
-   - Add handling in the Python server
+1. **Adding New Commands**: To add a new command:
+   - Add command handling in MCPWebSocketServer.cs
+   - Implement matching client function in websocket_client.py and mcp_client.py
+   - Add MCP tool implementation in server/mcp/tools/
 
-2. **Adding New Resources**: Similar to commands, new resources require implementation on both sides.
-
-3. **Custom Message Types**: The protocol can be extended with new message types if needed.
+2. **Adding New Resources**: To add a new resource:
+   - Implement the resource handler in server/mcp/resources/
+   - Register it with the MCP system
+   - Use existing command mechanisms to retrieve the data from Unity
 
 ## Architecture Diagram
 
@@ -174,30 +190,30 @@ The following diagram illustrates the components of the system and the communica
 ```mermaid
 sequenceDiagram
     participant AI as AI Client (MCP Consumer)
-    participant Python as Python MCP Server
-    participant Unity as Unity Plugin (Unity Engine)
-    AI->>Python: (1) MCP Tool/Resource Request (JSON over HTTP)<br/>e.g. execute_code, unity://scene
-    Python-->>Unity: (2) Forward command via WebSocket<br/>JSON message with action & params
-    note over Python,Unity: WebSocket connection is established by Unity at startup
+    participant Python as Python MCP Client
+    participant Unity as Unity Plugin (WebSocket Server)
+    AI->>Python: (1) MCP Tool/Resource Request (JSON over STDIO)<br/>e.g. execute_code_in_unity, unity://logs
+    Python-->>Unity: (2) Send command via WebSocket<br/>JSON message with command & parameters
+    note over Python,Unity: WebSocket connection is established by Python at startup
     Unity-->>Unity: (3) Execute command in Unity (main thread)<br/>e.g. run code or gather data
     Unity-->>Python: (4) Send Response via WebSocket<br/>JSON result or error (incl. image data if any)
     Python-->>AI: (5) MCP Response to AI (JSON/JSON+image)<br/>Returns result or error back to caller
     alt Image Data Returned
-        Unity-->>Python: (4b) Binary frame (PNG image bytes)<br/>(Or base64 image inside JSON)
-        Python-->>AI: (5b) Respond with image object/URL in MCP format
+        Unity-->>Python: (4b) Response with file path to saved image<br/>(Or base64 image inside JSON)
+        Python-->>AI: (5b) Respond with image object in MCP format
     end
     rect rgba(200, 255, 200, 0.1)
         Note over AI: AI (e.g. Claude) uses MCP spec to ask Python for Unity info.
-        Note over Python: Python server uses FastMCP to map AI requests to Unity commands.
-        Note over Unity: Unity plugin receives commands, uses Unity API to perform actions.
+        Note over Python: Python client connects to Unity WebSocket server.
+        Note over Unity: Unity plugin hosts WebSocket server to process commands.
     end
 ```
 
 In this workflow:
-1. The AI client sends a request to the Python MCP server.
-2. The Python server forwards the command to Unity via WebSocket.
+1. The AI client sends a request to the Python MCP client.
+2. The Python client sends a command to Unity via WebSocket.
 3. Unity executes the command on the main thread.
-4. Unity sends the response back to the Python server via WebSocket.
-5. The Python server formats the response and sends it back to the AI client.
+4. Unity sends the response back to the Python client via WebSocket.
+5. The Python client formats the response and sends it back to the AI client.
 
-This architecture ensures clean separation of concerns and allows for real-time communication between Unity and the AI client.
+This architecture ensures clean separation of concerns and allows for real-time communication between Unity and the AI client, with Unity as the central authority hosting the WebSocket server.

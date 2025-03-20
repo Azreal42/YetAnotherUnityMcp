@@ -1,44 +1,65 @@
-"""Unity information MCP resource implementation"""
+"""Unity environment information resource"""
 
 import logging
-from typing import Dict, Any
-from server.websocket_utils import send_request
-from server.async_utils import AsyncExecutor
+from typing import Any, Dict
+from fastmcp import FastMCP, Context
+from server.mcp_client import get_client
 
-logger = logging.getLogger("mcp_server")
+logger = logging.getLogger("mcp_resources")
 
-def get_unity_info_handler() -> Dict[str, Any]:
-    """Get information about the Unity environment
-
-    Returns:
-        Information about the Unity environment
+async def get_unity_info(ctx: Context) -> Dict[str, Any]:
     """
+    Get information about the Unity environment.
+    
+    Args:
+        ctx: MCP context
+        
+    Returns:
+        Dictionary containing Unity environment information
+    """
+    client = get_client()
+    
+    if not client.connected:
+        ctx.error("Not connected to Unity. Please check the Unity connection")
+        return {"error": "Not connected to Unity"}
+    
     try:
-        # Use our utility to run the coroutine safely across thread boundaries
-        return AsyncExecutor.run_in_thread_or_loop(
-            lambda: get_unity_info(),
-            timeout=30.0
-        )
+        ctx.info("Getting Unity environment information...")
+        result = await client.get_unity_info()
+        
+        # Parse the result into a dictionary if it's not already
+        if isinstance(result, str):
+            try:
+                import json
+                result = json.loads(result)
+            except:
+                # If parsing fails, return as a simple dictionary
+                return {"info": result}
+        
+        # Ensure the result is a dictionary
+        if not isinstance(result, dict):
+            return {"info": str(result)}
+            
+        return result
     except Exception as e:
-        logger.error(f"Error getting Unity info: {str(e)}")
+        error_msg = f"Error getting Unity info: {str(e)}"
+        ctx.error(error_msg)
+        logger.error(error_msg)
         return {"error": str(e)}
 
-async def get_unity_info() -> Dict[str, Any]:
-    """Get information about the Unity environment implementation"""
-    from server.mcp_server import manager, pending_requests
+def register_unity_info(mcp: FastMCP) -> None:
+    """
+    Register the unity_info resource with the MCP instance.
     
-    logger.info("Getting Unity info")
-    
-    try:
-        if manager.active_connections:
-            response: Dict[str, Any] = await send_request(manager, "unity://info", {}, pending_requests)
-            
-            if response.get("status") == "error":
-                logger.error(f"Error getting Unity info: {response.get('error')}")
-            else:
-                return response.get("result", {})
+    Args:
+        mcp: MCP instance
+    """
+    @mcp.resource("unity://info")
+    async def unity_info_resource(ctx: Context) -> Dict[str, Any]:
+        """
+        Get information about the Unity environment.
         
-        return {"error": "No Unity clients connected"}
-    except Exception as e:
-        logger.error(f"Error getting Unity info: {str(e)}")
-        return {"error": str(e)}
+        Returns:
+            Dictionary containing Unity environment information
+        """
+        return await get_unity_info(ctx)
