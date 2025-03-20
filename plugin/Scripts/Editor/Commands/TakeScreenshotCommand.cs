@@ -2,12 +2,14 @@ using System;
 using System.IO;
 using UnityEngine;
 using UnityEditor;
+using YetAnotherUnityMcp.Editor.Models;
 
 namespace YetAnotherUnityMcp.Editor.Commands
 {
     /// <summary>
     /// Command to take a screenshot of the Unity Editor
     /// </summary>
+    [MCPTool("take_screenshot", "Take a screenshot of the Unity Editor", "take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)")]
     public static class TakeScreenshotCommand
     {
         /// <summary>
@@ -17,7 +19,10 @@ namespace YetAnotherUnityMcp.Editor.Commands
         /// <param name="width">Width of the screenshot (only used for superSize calculation)</param>
         /// <param name="height">Height of the screenshot (only used for superSize calculation)</param>
         /// <returns>Result message indicating success or failure</returns>
-        public static string Execute(string outputPath, int width = 1920, int height = 1080)
+        public static string Execute(
+            [MCPParameter("output_path", "Path where to save the screenshot", "string", false)] string outputPath,
+            [MCPParameter("width", "Width of the screenshot", "number", false)] int width = 1920,
+            [MCPParameter("height", "Height of the screenshot", "number", false)] int height = 1080)
         {
             try
             {

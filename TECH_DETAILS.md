@@ -287,7 +287,38 @@ The schema system uses C# attributes for automatic schema generation. This allow
 3. **Registration**:
    Tools and resources are registered in the Unity `MCPRegistry` class, which maintains a singleton instance with all available operations. The registration happens automatically using reflection on attributed classes.
 
-#### Example: Attribute-Based Tool Definition
+#### Example: Attribute-Based Command Definition
+
+```csharp
+/// <summary>
+/// Command to execute C# code at runtime in the Unity Editor
+/// </summary>
+[MCPTool("execute_code", "Execute C# code in Unity", "execute_code(\"Debug.Log(\\\"Hello\\\"); return 42;\")")]
+public static class ExecuteCodeCommand
+{
+    /// <summary>
+    /// Execute C# code in the Unity Editor
+    /// </summary>
+    /// <param name="code">The C# code to execute</param>
+    /// <returns>Result of the execution</returns>
+    public static string Execute(
+        [MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code)
+    {
+        // Implementation...
+    }
+}
+```
+
+The system will automatically:
+1. Convert the command class name from CamelCase to snake_case (e.g., `ExecuteCodeCommand` → `execute_code`)
+2. Extract parameter information from the `Execute` method's parameters
+3. Generate input schema based on parameter attributes
+4. Infer output schema from the return type
+5. Register the tool with the MCP registry
+
+#### Example: Attribute-Based Model Definition (Legacy)
+
+For backward compatibility, the system also supports model-based tool definitions:
 
 ```csharp
 /// <summary>
@@ -334,21 +365,26 @@ Clients can retrieve the schema using the `get_schema` command, which returns a 
 The system is designed to be extensible:
 
 1. **Adding New Commands**: To add a new command:
-   - Create a new tool class with MCPToolAttribute and input/output schema models
+   - Create a new static command class ending with "Command" (e.g., `MyNewCommand`)
+   - Add the `[MCPTool]` attribute with name, description, and example
+   - Implement a static `Execute` method with appropriate parameters
+   - Add `[MCPParameter]` attributes to method parameters for better documentation
    - Add command handling in MCPWebSocketServer.cs ProcessCommandRequest method
    - Add a matching command method in UnityWebSocketClient
    - Create a new tool implementation file in server/mcp/tools/
    - Use the unified execution pattern with execute_unity_operation
-   - Register the tool class in MCPRegistry.RegisterBuiltInTools()
    - Register the tool in mcp/tools/__init__.py
+   - The schema will be automatically generated and registered
 
 2. **Adding New Resources**: To add a new resource:
-   - Create a new resource class with MCPResourceAttribute and output schema model
+   - Create a new resource handler class ending with "Resource" (e.g., `MyNewResource`)
+   - Add the `[MCPResource]` attribute with name, description, URL pattern, and example
+   - Implement a static `GetResource` method with parameters matching URL pattern variables
+   - Add `[MCPParameter]` attributes to method parameters for better documentation
    - Implement the resource handler in server/mcp/resources/
    - Use the unified execution pattern with execute_unity_operation
-   - Register the resource class in MCPRegistry.RegisterBuiltInResources()
-   - Register it with the MCP system in mcp/resources/__init__.py
-   - Either use existing commands or add a new command if needed
+   - Register the resource in mcp/resources/__init__.py
+   - The schema will be automatically generated and registered
 
 ## Architecture Diagram
 

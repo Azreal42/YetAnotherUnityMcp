@@ -4,12 +4,14 @@ using System.Reflection;
 using System.Text;
 using UnityEngine;
 using UnityEditor;
+using YetAnotherUnityMcp.Editor.Models;
 
 namespace YetAnotherUnityMcp.Editor.Commands
 {
     /// <summary>
     /// Command to get logs from the Unity Editor console
     /// </summary>
+    [MCPTool("get_logs", "Get logs from the Unity Editor console", "get_logs(max_logs=50)")]
     public static class GetLogsCommand
     {
         /// <summary>
@@ -17,7 +19,8 @@ namespace YetAnotherUnityMcp.Editor.Commands
         /// </summary>
         /// <param name="maxLogs">Maximum number of logs to return</param>
         /// <returns>JSON string with logs</returns>
-        public static string Execute(int maxLogs = 100)
+        public static string Execute(
+            [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100)
         {
             try
             {

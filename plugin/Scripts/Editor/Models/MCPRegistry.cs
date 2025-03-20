@@ -91,7 +91,10 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         private void RegisterBuiltInTools()
         {
-            // Use reflection to find and register all tool descriptors from attributed classes
+            // Find and register all command classes with MCPTool attributes
+            RegisterCommandsFromAssembly(Assembly.GetExecutingAssembly());
+            
+            // Also register model-based tools for backward compatibility
             RegisterToolFromType(typeof(ExecuteCodeTool));
             RegisterToolFromType(typeof(TakeScreenshotTool));
             RegisterToolFromType(typeof(ModifyObjectTool));
@@ -101,7 +104,63 @@ namespace YetAnotherUnityMcp.Editor.Models
         }
         
         /// <summary>
-        /// Register a tool descriptor from a type using reflection and attributes
+        /// Register all command classes with MCPTool attributes from an assembly
+        /// </summary>
+        /// <param name="assembly">Assembly to scan</param>
+        private void RegisterCommandsFromAssembly(Assembly assembly)
+        {
+            try
+            {
+                // Get all types from the assembly
+                var types = assembly.GetTypes();
+                
+                foreach (var type in types)
+                {
+                    // Check if the type has the MCPTool attribute
+                    if (type.GetCustomAttribute<MCPToolAttribute>() != null)
+                    {
+                        // Check if it's a command class (ends with "Command")
+                        if (type.Name.EndsWith("Command"))
+                        {
+                            RegisterCommandFromType(type);
+                        }
+                        else
+                        {
+                            // Otherwise, it's a model-based tool
+                            RegisterToolFromType(type);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error scanning assembly for commands: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a command class as a tool using reflection and introspection
+        /// </summary>
+        /// <param name="type">Command class type</param>
+        private void RegisterCommandFromType(Type type)
+        {
+            try
+            {
+                ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromCommandType(type);
+                if (descriptor != null)
+                {
+                    RegisterTool(descriptor);
+                    Debug.Log($"[MCPRegistry] Registered command class {type.Name} as tool {descriptor.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error registering command {type.Name}: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a tool descriptor from a model type using reflection and attributes
         /// </summary>
         /// <param name="type">Type to create tool descriptor from</param>
         private void RegisterToolFromType(Type type)
@@ -118,7 +177,10 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         private void RegisterBuiltInResources()
         {
-            // Use reflection to find and register all resource descriptors from attributed classes
+            // Find and register all resource handler classes with MCPResource attributes
+            RegisterResourceHandlersFromAssembly(Assembly.GetExecutingAssembly());
+            
+            // Also register model-based resources for backward compatibility
             RegisterResourceFromType(typeof(UnityInfoResource));
             RegisterResourceFromType(typeof(UnityLogsResource));
             RegisterResourceFromType(typeof(UnitySceneResource));
@@ -127,7 +189,63 @@ namespace YetAnotherUnityMcp.Editor.Models
         }
         
         /// <summary>
-        /// Register a resource descriptor from a type using reflection and attributes
+        /// Register all resource handler classes with MCPResource attributes from an assembly
+        /// </summary>
+        /// <param name="assembly">Assembly to scan</param>
+        private void RegisterResourceHandlersFromAssembly(Assembly assembly)
+        {
+            try
+            {
+                // Get all types from the assembly
+                var types = assembly.GetTypes();
+                
+                foreach (var type in types)
+                {
+                    // Check if the type has the MCPResource attribute
+                    if (type.GetCustomAttribute<MCPResourceAttribute>() != null)
+                    {
+                        // Check if it's a resource handler class (ends with "Resource")
+                        if (type.Name.EndsWith("Resource") && !type.Name.EndsWith("ModelResource"))
+                        {
+                            RegisterResourceHandlerFromType(type);
+                        }
+                        else
+                        {
+                            // Otherwise, it's a model-based resource
+                            RegisterResourceFromType(type);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error scanning assembly for resource handlers: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a resource handler class as a resource using reflection and introspection
+        /// </summary>
+        /// <param name="type">Resource handler class type</param>
+        private void RegisterResourceHandlerFromType(Type type)
+        {
+            try
+            {
+                ResourceDescriptor descriptor = MCPAttributeUtil.CreateResourceDescriptorFromHandlerType(type);
+                if (descriptor != null)
+                {
+                    RegisterResource(descriptor);
+                    Debug.Log($"[MCPRegistry] Registered resource handler {type.Name} as resource {descriptor.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error registering resource handler {type.Name}: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a resource descriptor from a model type using reflection and attributes
         /// </summary>
         /// <param name="type">Type to create resource descriptor from</param>
         private void RegisterResourceFromType(Type type)

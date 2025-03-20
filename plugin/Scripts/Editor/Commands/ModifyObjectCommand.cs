@@ -2,12 +2,14 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEditor;
+using YetAnotherUnityMcp.Editor.Models;
 
 namespace YetAnotherUnityMcp.Editor.Commands
 {
     /// <summary>
     /// Command to modify a property of a Unity GameObject
     /// </summary>
+    [MCPTool("modify_object", "Modify a property of a Unity GameObject", "modify_object(object_id=\"Main Camera\", property_path=\"transform.position.x\", property_value=10)")]
     public static class ModifyObjectCommand
     {
         /// <summary>
@@ -17,7 +19,10 @@ namespace YetAnotherUnityMcp.Editor.Commands
         /// <param name="propertyPath">Path to the property (e.g. "position.x" or "GetComponent<Renderer>().material.color")</param>
         /// <param name="propertyValue">The new value for the property</param>
         /// <returns>Result message indicating success or failure</returns>
-        public static string Execute(string objectId, string propertyPath, object propertyValue)
+        public static string Execute(
+            [MCPParameter("object_id", "ID or path of the GameObject", "string", true)] string objectId,
+            [MCPParameter("property_path", "Path to the property to modify", "string", true)] string propertyPath,
+            [MCPParameter("property_value", "New value for the property", "any", true)] object propertyValue)
         {
             try
             {

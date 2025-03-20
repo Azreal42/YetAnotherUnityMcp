@@ -8,11 +8,14 @@ using Microsoft.CSharp;
 using System.Threading.Tasks;
 using UnityEditor;
 
+using YetAnotherUnityMcp.Editor.Models;
+
 namespace YetAnotherUnityMcp.Editor.Commands
 {
     /// <summary>
     /// Command to execute C# code at runtime in the Unity Editor
     /// </summary>
+    [MCPTool("execute_code", "Execute C# code in Unity", "execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")")]
     public static class ExecuteCodeCommand
     {
         private const string ClassTemplate = @"
@@ -51,7 +54,7 @@ namespace YetAnotherUnityMcp.Runtime
         /// </summary>
         /// <param name="code">The C# code to execute</param>
         /// <returns>Result of the execution</returns>
-        public static string Execute(string code)
+        public static string Execute([MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code)
         {
             try
             {
