@@ -18,11 +18,12 @@ The Unity side is implemented as a typical Unity plugin with separate editor cod
 
 The Python client uses the FastMCP framework to define the available actions and data endpoints in an organized way. Key components include:
 
-1. **mcp_server.py**: The main MCP server implementation using FastMCP.
-2. **mcp_client.py**: The high-level client for communicating with Unity.
+1. **mcp_server.py**: The main MCP server implementation using FastMCP with lifespan management.
+2. **unity_websocket_client.py**: The high-level client for communicating with Unity.
 3. **websocket_client.py**: The low-level WebSocket client implementation.
-4. **mcp/tools/**: Tool implementations for MCP.
-5. **mcp/resources/**: Resource implementations for MCP.
+4. **mcp/unity_client_util.py**: Utility functions for standardized client operations.
+5. **mcp/tools/**: Tool implementations for MCP with unified execution pattern.
+6. **mcp/resources/**: Resource implementations for MCP with standardized error handling.
 
 The client can run in two modes:
 - **MCP mode**: Using FastMCP's built-in server with STDIO transport (via `fastmcp run` or an MCP-enabled FastAPI app).
@@ -147,13 +148,20 @@ The Python client implementation includes:
 1. **WebSocketClient**: Low-level client that handles:
    - Connection to Unity server
    - Message sending/receiving
+   - Request-response tracking with IDs
    - Event-based communication (connected, disconnected, message, error)
    - Async/await interface for Python
 
-2. **MCPClient**: High-level client that provides:
+2. **UnityWebSocketClient**: High-level client that provides:
    - Higher-level APIs for Unity commands (execute_code, take_screenshot, etc.)
    - Callback registration for status events
    - Error handling and logging
+
+3. **unity_client_util**: Utility module that provides:
+   - Standardized execution pattern for all operations
+   - Automatic reconnection attempts
+   - Consistent error handling and formatting
+   - Context integration with FastMCP
 
 ## Error Handling & Security
 
@@ -174,14 +182,17 @@ The system is designed to handle errors gracefully and maintain security:
 The system is designed to be extensible:
 
 1. **Adding New Commands**: To add a new command:
-   - Add command handling in MCPWebSocketServer.cs
-   - Implement matching client function in websocket_client.py and mcp_client.py
-   - Add MCP tool implementation in server/mcp/tools/
+   - Add command handling in MCPWebSocketServer.cs ProcessCommandRequest method
+   - Add a matching command method in UnityWebSocketClient
+   - Create a new tool implementation file in server/mcp/tools/
+   - Use the unified execution pattern with execute_unity_operation
+   - Register the tool in mcp/tools/__init__.py
 
 2. **Adding New Resources**: To add a new resource:
    - Implement the resource handler in server/mcp/resources/
-   - Register it with the MCP system
-   - Use existing command mechanisms to retrieve the data from Unity
+   - Use the unified execution pattern with execute_unity_operation
+   - Register it with the MCP system in mcp/resources/__init__.py
+   - Either use existing commands or add a new command if needed
 
 ## Architecture Diagram
 

@@ -95,14 +95,19 @@ YetAnotherUnityMcp/
 ├── server/                      # Python MCP client
 │   ├── mcp/                     # MCP tool and resource implementations
 │   │   ├── tools/               # Tool implementations
-│   │   └── resources/           # Resource implementations
-│   ├── mcp_client.py            # WebSocket client for Unity
+│   │   ├── resources/           # Resource implementations
+│   │   └── unity_client_util.py # Unity client utility functions
+│   ├── unity_websocket_client.py # High-level Unity WebSocket client
 │   ├── mcp_server.py            # MCP server implementation
-│   └── websocket_client.py      # WebSocket client implementation
+│   └── websocket_client.py      # Low-level WebSocket client implementation
 ├── plugin/                      # Unity C# plugin
 │   ├── Scripts/                 # Plugin source code
 │   │   ├── Editor/              # Editor extensions
 │   │   │   ├── Commands/        # Editor command implementations
+│   │   │   ├── MCPWindow.cs     # Server control window
+│   │   │   ├── MCPMenu.cs       # Unity menu integration
+│   │   │   ├── MCPWebSocketServer.cs # High-level server implementation
+│   │   │   ├── CommandExecutionMonitor.cs # Performance monitoring
 │   │   │   ├── Models/          # Data models for Editor
 │   │   │   └── WebSocket/       # WebSocket server implementation
 │   │   └── YetAnotherUnityMcp.asmdef  # Assembly definition
@@ -127,7 +132,9 @@ The Python client connects to the Unity WebSocket server and provides an MCP int
 
 - Translates MCP requests into WebSocket messages for Unity
 - Converts Unity responses into MCP resource data
-- Handles connection management and error recovery
+- Uses FastMCP's lifespan management for connection lifecycle
+- Provides standardized error handling and reconnection logic
+- Implements a unified execution pattern for all operations
 - Provides tools and resources through the FastMCP framework
 
 ## MCP Resources and Tools

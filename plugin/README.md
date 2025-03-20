@@ -5,39 +5,45 @@ This Unity plugin implements a WebSocket server that allows AI agents to control
 ## Installation
 
 1. Import the plugin into your Unity project
-2. Open the WebSocket Server window from the menu: `Window > WebSocket MCP Server`
-3. Start the server using the "Start Server" button
-4. Connect to the server from the Python MCP client
+2. The plugin will automatically register itself in the Unity Editor menu
+3. By default, the server will automatically start when Unity launches (configurable)
+4. Alternatively, open the server window from the menu: `Window > MCP Server`
+5. Start the server using the "Start Server" button if not using auto-start
+6. Connect to the server from the Python MCP client
 
 ## Usage
 
-### WebSocket Server Window
+### MCP Server Window
 
 The plugin includes a server window for managing and monitoring WebSocket connections. Open it from the menu:
 
 ```
-Window > WebSocket MCP Server
+Window > MCP Server
 ```
 
 This window allows you to:
 - Start and stop the WebSocket server
 - View connected clients
 - Monitor message traffic
+- Execute local commands for testing
 - Configure server options (host, port)
+- Enable/disable auto-start on Unity launch
+- View performance statistics
 
-### Local Client Window
+### Local Command Testing
 
-For testing without connecting to the Python client, you can use the local client window:
+For testing without connecting to the Python client, you can use the MCP Server window's local command testing section:
 
 ```
-Window > MCP Client
+Window > MCP Server > Local Command Testing
 ```
 
-This window allows you to execute commands directly within Unity:
-- Execute C# code
-- Take screenshots
-- Modify GameObject properties
+This section allows you to execute commands directly within Unity:
+- Execute C# code with syntax highlighting
+- Take screenshots with configurable resolution 
+- Modify GameObject properties with type conversion
 - Get Unity information and logs
+- View command results in real time
 
 ### Server API
 
@@ -45,10 +51,16 @@ You can use the MCPWebSocketServer API in your own scripts:
 
 ```csharp
 // Get the server instance
+using YetAnotherUnityMcp.Editor.WebSocket;
 MCPWebSocketServer server = MCPWebSocketServer.Instance;
 
-// Start the server
-await server.StartAsync("localhost", 8080);
+// Start the server (returns true on success)
+bool success = await server.StartAsync("localhost", 8080);
+
+// Get server status
+bool isRunning = server.IsRunning;
+string serverUrl = server.ServerUrl;
+int clientCount = server.ClientCount;
 
 // Send a message to a specific client
 await server.SendMessageAsync(clientId, messageObject);
@@ -61,8 +73,14 @@ await server.StopAsync();
 
 // Subscribe to events
 server.OnServerStarted += HandleServerStarted;
+server.OnServerStopped += HandleServerStopped;
 server.OnClientConnected += HandleClientConnected;
+server.OnClientDisconnected += HandleClientDisconnected;
 server.OnMessageReceived += HandleMessageReceived;
+server.OnError += HandleError;
+
+// Control auto-start behavior
+MCPServerInitializer.AutoStartEnabled = true; // Enable auto-start
 ```
 
 ### Local Execution API
@@ -83,6 +101,10 @@ string result = executor.ExecuteCommand("execute_code", new Dictionary<string, o
 ## Features
 
 - WebSocket server for handling connections from MCP clients
+- Automatic server startup on Unity Editor launch (configurable)
+- Thread-safe message processing on Unity's main thread
+- Comprehensive event system for server and client events
+- Performance monitoring with detailed metrics
 - Local command execution for testing without a client
 - Execute C# code in the Unity Editor
 - Take screenshots of the Unity Editor
