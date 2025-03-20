@@ -1,5 +1,10 @@
 # YetAnotherUnityMcp
 
+DO NOT USE THIS. THIS IS A TOY PROJECT TO SEE WHAT I CAN DO WITH CLAUDE CODE.
+I'M TRYING TO ASSESS IF A DEV CAN CORRECTLY WORK WITH JUST VIBE CODING
+SO FAR, IT SEEMS NOT TO BE THE CASE !
+
+
 A Unity Master Control Protocol (MCP) implementation that allows AI agents to control and interact with Unity.
 
 ## Overview
