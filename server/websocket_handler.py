@@ -6,8 +6,13 @@ from typing import Dict, Any, Optional, List, Union
 from fastapi import WebSocket, WebSocketDisconnect
 from fastmcp import Context
 from server.connection_manager import ConnectionManager
-from server.mcp_tools import execute_code, screen_shot_editor, modify_object
-from server.mcp_resources import get_unity_info, get_logs, get_scene, get_object
+from server.mcp.tools.execute_code import execute_code
+from server.mcp.tools.screen_shot import screen_shot_editor
+from server.mcp.tools.modify_object import modify_object
+from server.mcp.resources.unity_info import get_unity_info
+from server.mcp.resources.logs import get_logs
+from server.mcp.resources.scene import get_scene
+from server.mcp.resources.object import get_object
 
 logger = logging.getLogger("mcp_server")
 
