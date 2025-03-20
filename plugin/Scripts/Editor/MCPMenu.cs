@@ -75,5 +75,31 @@ namespace YetAnotherUnityMcp.Editor
             CommandExecutionMonitor.Instance.ClearMetrics();
             Debug.Log("[MCP Menu] Performance metrics cleared");
         }
+        
+        [MenuItem("MCP/Server/Enable Auto-start")]
+        public static void EnableAutoStart()
+        {
+            MCPServerInitializer.AutoStartEnabled = true;
+            Debug.Log("[MCP Menu] Server auto-start enabled");
+        }
+        
+        [MenuItem("MCP/Server/Enable Auto-start", true)]
+        public static bool ValidateEnableAutoStart()
+        {
+            return !MCPServerInitializer.AutoStartEnabled;
+        }
+        
+        [MenuItem("MCP/Server/Disable Auto-start")]
+        public static void DisableAutoStart()
+        {
+            MCPServerInitializer.AutoStartEnabled = false;
+            Debug.Log("[MCP Menu] Server auto-start disabled");
+        }
+        
+        [MenuItem("MCP/Server/Disable Auto-start", true)]
+        public static bool ValidateDisableAutoStart()
+        {
+            return MCPServerInitializer.AutoStartEnabled;
+        }
     }
 }

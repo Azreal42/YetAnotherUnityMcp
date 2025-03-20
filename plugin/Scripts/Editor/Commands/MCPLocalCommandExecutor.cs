@@ -42,7 +42,7 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
         public string ExecuteCommand(string command, Dictionary<string, object> parameters)
         {
             // Use the performance monitor to track execution time
-            using (var timer = WebSocketPerformanceMonitor.Instance.StartOperation($"LocalCommand_{command}"))
+            using (var timer = CommandExecutionMonitor.Instance.StartOperation($"LocalCommand_{command}"))
             {
                 try
                 {

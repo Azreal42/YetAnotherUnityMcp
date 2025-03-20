@@ -15,6 +15,21 @@ namespace YetAnotherUnityMcp.Editor
     [InitializeOnLoad]
     public static class MCPServerInitializer
     {
+        // Preference key for auto-start setting
+        private const string AUTO_START_PREF_KEY = "YetAnotherUnityMcp.AutoStartServer";
+        
+        // Default value for auto-start (enabled by default)
+        private const bool AUTO_START_DEFAULT = true;
+        
+        /// <summary>
+        /// Get or set whether the server should auto-start
+        /// </summary>
+        public static bool AutoStartEnabled
+        {
+            get => EditorPrefs.GetBool(AUTO_START_PREF_KEY, AUTO_START_DEFAULT);
+            set => EditorPrefs.SetBool(AUTO_START_PREF_KEY, value);
+        }
+        
         static MCPServerInitializer()
         {
             // Set up automatic server cleanup when editor is shutting down
@@ -26,6 +41,47 @@ namespace YetAnotherUnityMcp.Editor
             
             // Log initialization
             Debug.Log("[MCP Server] MCP WebSocket Server module initialized");
+            
+            // Auto-start server on editor startup (if enabled)
+            EditorApplication.delayCall += () => {
+                // Start with a small delay to ensure Unity is fully initialized
+                if (AutoStartEnabled)
+                {
+                    AutoStartServer();
+                }
+                else
+                {
+                    Debug.Log("[MCP Server] Auto-start is disabled. Use MCP/Server/Start Server to start manually.");
+                }
+            };
+        }
+        
+        /// <summary>
+        /// Automatically start the WebSocket server
+        /// </summary>
+        private static async void AutoStartServer()
+        {
+            try
+            {
+                if (!WebSocket.MCPWebSocketServer.Instance.IsRunning)
+                {
+                    Debug.Log("[MCP Server] Auto-starting WebSocket server...");
+                    bool success = await WebSocket.MCPWebSocketServer.Instance.StartAsync();
+                    
+                    if (success)
+                    {
+                        Debug.Log($"[MCP Server] WebSocket server auto-started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[MCP Server] Failed to auto-start WebSocket server");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCP Server] Error auto-starting WebSocket server: {ex.Message}");
+            }
         }
     }
 
@@ -116,6 +172,16 @@ namespace YetAnotherUnityMcp.Editor
                 hostname = EditorGUILayout.TextField("Hostname", hostname);
                 port = EditorGUILayout.IntField("Port", port);
                 EditorGUI.EndDisabledGroup();
+                
+                // Auto-start preference
+                bool autoStart = MCPServerInitializer.AutoStartEnabled;
+                bool newAutoStart = EditorGUILayout.Toggle("Auto-start on Unity Launch", autoStart);
+                
+                if (newAutoStart != autoStart)
+                {
+                    MCPServerInitializer.AutoStartEnabled = newAutoStart;
+                    EditorUtility.SetDirty(this);
+                }
             }
             
             EditorGUILayout.Space();
