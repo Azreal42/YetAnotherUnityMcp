@@ -178,52 +178,66 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
         /// <returns>Result of the command</returns>
         public async Task<string> SendCommandAsync(string command, Dictionary<string, object> parameters)
         {
-            long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            Debug.Log($"[MCP WebSocket Manager] Starting command: {command} at {startTime}ms");
-            if (!IsConnected)
+            // Use the performance monitor to track execution time
+            using (var timer = WebSocketPerformanceMonitor.Instance.StartOperation($"Command_{command}"))
             {
-                throw new InvalidOperationException("WebSocket is not connected");
+                // Track the start time for our own logging
+                long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                Debug.Log($"[MCP] Starting command: {command} at {startTime}ms");
+                
+                if (!IsConnected)
+                {
+                    throw new InvalidOperationException("WebSocket is not connected");
+                }
+                
+                // Generate a unique request ID
+                string requestId = GenerateRequestId();
+                
+                // Create a task completion source for the response
+                var tcs = new TaskCompletionSource<string>();
+                _pendingRequests[requestId] = tcs;
+                
+                // Create the request message
+                var request = new Dictionary<string, object>
+                {
+                    { "id", requestId },
+                    { "command", command },
+                    { "client_timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
+                };
+                
+                if (parameters != null)
+                {
+                    request["parameters"] = parameters;
+                }
+                
+                // Serialize and send the request
+                string json = JsonConvert.SerializeObject(request);
+                await _client.SendMessageAsync(json);
+                
+                // Set a timeout for the request (60 seconds)
+                var timeoutTask = Task.Delay(60000);
+                var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+                
+                if (completedTask == timeoutTask)
+                {
+                    // Request timed out, remove it from pending requests
+                    _pendingRequests.Remove(requestId);
+                    throw new TimeoutException($"Command {command} timed out");
+                }
+                
+                // Request completed successfully, return the result
+                var result = await tcs.Task;
+                long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                long elapsed = endTime - startTime;
+                
+                // Only log if it took a significant amount of time
+                if (elapsed > 100)
+                {
+                    Debug.Log($"[MCP] Completed command: {command} in {elapsed}ms");
+                }
+                
+                return result;
             }
-            
-            // Generate a unique request ID
-            string requestId = GenerateRequestId();
-            
-            // Create a task completion source for the response
-            var tcs = new TaskCompletionSource<string>();
-            _pendingRequests[requestId] = tcs;
-            
-            // Create the request message
-            var request = new Dictionary<string, object>
-            {
-                { "id", requestId },
-                { "command", command }
-            };
-            
-            if (parameters != null)
-            {
-                request["parameters"] = parameters;
-            }
-            
-            // Serialize and send the request
-            string json = JsonConvert.SerializeObject(request);
-            await _client.SendMessageAsync(json);
-            
-            // Set a timeout for the request (60 seconds)
-            var timeoutTask = Task.Delay(60000);
-            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-            
-            if (completedTask == timeoutTask)
-            {
-                // Request timed out, remove it from pending requests
-                _pendingRequests.Remove(requestId);
-                throw new TimeoutException($"Command {command} timed out");
-            }
-            
-            // Request completed successfully, return the result
-            var result = await tcs.Task;
-            long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            Debug.Log($"[MCP WebSocket Manager] Completed command: {command} in {endTime - startTime}ms");
-            return result;
         }
 
         private string GenerateRequestId()
@@ -247,12 +261,7 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
         {
             try
             {
-                // Only log short messages to reduce overhead
-                if (message.Length < 500) {
-                    Debug.Log($"[MCP WebSocket Manager] Message received: {message}");
-                } else {
-                    Debug.Log($"[MCP WebSocket Manager] Message received: {message.Substring(0, 100)}... (truncated, {message.Length} bytes)");
-                }
+                // We'll let the WebSocketJsonMessage handle the logging with its Process method
                 // Try to parse the message as JSON
                 var response = JsonConvert.DeserializeObject<Dictionary<string, object>>(message);
                 

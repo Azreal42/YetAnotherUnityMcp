@@ -51,17 +51,6 @@ async def send_request(
     # Determine the appropriate timeout based on action type
     timeout = 60.0  # Default to 60 seconds for most operations
     
-    # Adjust timeout based on the specific operation
-    if action == "execute_code":
-        # Code execution might take longer
-        timeout = 90.0
-    elif action == "screen_shot_editor" or action == "take_screenshot":
-        # Screenshots can be large and take time
-        timeout = 60.0
-    elif action in ["get_logs", "get_unity_info", "unity://info", "unity://logs"]:
-        # These are usually quicker
-        timeout = 40.0
-    
     # Send the request to the first connected client
     await manager.send_message(manager.active_connections[0], json_request)
     
