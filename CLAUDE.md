@@ -9,6 +9,24 @@ YetAnotherUnityMcp is a system that bridges the Unity game engine with AI-driven
 
 This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents to inspect and control a running Unity scene in a structured, safe manner.
 
+## Code Structure
+The server code is organized with a clean separation of MCP components:
+
+- `server/mcp_server.py`: Main server entry point that initializes FastMCP and WebSocket handlers
+- `server/mcp/`: Main module containing MCP tools and resources implementations
+  - `mcp/__init__.py`: Root module initialization
+  - `mcp/tools/`: Module for all MCP tool handlers
+    - `tools/__init__.py`: Exports and registers all tool handlers with init_mcp()
+    - `tools/execute_code.py`: Execute C# code tool
+    - `tools/screen_shot.py`: Screenshot tool
+    - `tools/modify_object.py`: Object modification tool
+  - `mcp/resources/`: Module for all MCP resource handlers
+    - `resources/__init__.py`: Exports and registers all resource handlers with init_mcp()
+    - `resources/unity_info.py`: Unity environment info resource
+    - `resources/logs.py`: Unity logs resource
+    - `resources/scene.py`: Unity scene resource
+    - `resources/object.py`: Unity GameObject resource
+
 ## Model Context Protocol (MCP)
 We use FastMCP for MCP integration, which provides:
 - Simple decorator-based API for creating MCP servers
@@ -114,6 +132,12 @@ def create_object() -> str:
   - Import order: standard library, third-party, local modules
   - Error handling: use specific exceptions, log errors properly
   - All MCP handlers must be properly typed and documented
+  - MCP decorators should be organized in separate files:
+    - Each tool should have its own file in `mcp/tools/`
+    - Each resource should have its own file in `mcp/resources/`
+    - Handler functions should be named with a consistent pattern (`*_handler`)
+    - Implementation functions should have the same name without the `_handler` suffix
+    - Each module should provide an `init_mcp()` function to register decorators
 
 - **C# (Unity)**:
   - Follow Unity's C# style guide
@@ -121,3 +145,16 @@ def create_object() -> str:
   - Use camelCase for variables and private fields
   - Implement proper serialization for MCP communication
   - Use descriptive naming and add comments for complex logic
+
+## Known Issues
+
+1. When creating circular imports between modules with the new MCP structure, ensure you use local imports within functions to avoid circular dependencies:
+
+```python
+# Good - avoid circular imports
+async def get_unity_info() -> Dict[str, Any]:
+    # Import locally to avoid circular dependencies
+    from server.mcp_server import manager, pending_requests
+    
+    # Implementation here
+```
