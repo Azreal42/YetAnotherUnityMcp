@@ -9,14 +9,32 @@ namespace YetAnotherUnityMcp.Editor.Commands
     /// <summary>
     /// Command to get information about the Unity environment
     /// </summary>
-    [MCPResourceAttribute("get_unity_info", "Get information about the Unity environment", "get_unity_info()")]
+    [MCPTool("get_unity_info", "Get information about the Unity environment", "get_unity_info()")]
+    [MCPResource("unity_info", "Get information about the Unity environment", "unity://info", "unity://info")]
     public static class GetUnityInfoCommand
     {
         /// <summary>
-        /// Gets information about the Unity Editor environment
+        /// Gets information about the Unity Editor environment - Tool method
         /// </summary>
         /// <returns>JSON string with Unity information</returns>
         public static string Execute()
+        {
+            return GetUnityInfoImpl();
+        }
+        
+        /// <summary>
+        /// Gets information about the Unity Editor environment - Resource method
+        /// </summary>
+        /// <returns>JSON string with Unity information</returns>
+        public static string GetResource()
+        {
+            return GetUnityInfoImpl();
+        }
+        
+        /// <summary>
+        /// Implementation of Unity info retrieval shared by both Execute and GetResource methods
+        /// </summary>
+        private static string GetUnityInfoImpl()
         {
             try
             {

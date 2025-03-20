@@ -11,16 +11,36 @@ namespace YetAnotherUnityMcp.Editor.Commands
     /// <summary>
     /// Command to get logs from the Unity Editor console
     /// </summary>
-    [MCPResourceAttribute("get_logs", "Get logs from the Unity Editor console", "get_logs(max_logs=50)")]
+    [MCPTool("get_logs", "Get logs from the Unity Editor console", "get_logs(max_logs=50)")]
+    [MCPResource("unity_logs", "Get logs from the Unity Editor console", "unity://logs/{max_logs}", "unity://logs/50")]
     public static class GetLogsCommand
     {
         /// <summary>
-        /// Get logs from the Unity Editor console
+        /// Get logs from the Unity Editor console - Tool method
         /// </summary>
         /// <param name="maxLogs">Maximum number of logs to return</param>
         /// <returns>JSON string with logs</returns>
         public static string Execute(
             [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100)
+        {
+            return GetLogsImpl(maxLogs);
+        }
+            
+        /// <summary>
+        /// Get logs from the Unity Editor console - Resource method
+        /// </summary>
+        /// <param name="maxLogs">Maximum number of logs to return</param>
+        /// <returns>JSON string with logs</returns>
+        public static string GetResource(
+            [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100)
+        {
+            return GetLogsImpl(maxLogs);
+        }
+        
+        /// <summary>
+        /// Implementation of log retrieval shared by both Execute and GetResource methods
+        /// </summary>
+        private static string GetLogsImpl(int maxLogs)
         {
             try
             {
@@ -59,6 +79,7 @@ namespace YetAnotherUnityMcp.Editor.Commands
             {
                 return $"Error getting logs: {ex.Message}\nStackTrace: {ex.StackTrace}";
             }
+        
         }
 
         private class LogEntry
