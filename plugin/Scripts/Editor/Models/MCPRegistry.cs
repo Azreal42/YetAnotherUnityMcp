@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
+using System.Reflection;
+using YetAnotherUnityMcp.Editor.Commands;
 
 namespace YetAnotherUnityMcp.Editor.Models
 {
@@ -94,13 +96,11 @@ namespace YetAnotherUnityMcp.Editor.Models
             // Find and register all command classes with MCPTool attributes
             RegisterCommandsFromAssembly(Assembly.GetExecutingAssembly());
             
-            // Also register model-based tools for backward compatibility
-            RegisterToolFromType(typeof(ExecuteCodeTool));
-            RegisterToolFromType(typeof(TakeScreenshotTool));
-            RegisterToolFromType(typeof(ModifyObjectTool));
-            RegisterToolFromType(typeof(GetLogsTool));
-            RegisterToolFromType(typeof(GetUnityInfoTool));
-            RegisterToolFromType(typeof(GetSchemaTool));
+            // Also explicitly register command classes for tools
+            // Only register commands that are marked as tools, not resources
+            RegisterToolFromType(typeof(ExecuteCodeCommand));
+            RegisterToolFromType(typeof(TakeScreenshotCommand));
+            RegisterToolFromType(typeof(ModifyObjectCommand));
         }
         
         /// <summary>
@@ -116,8 +116,9 @@ namespace YetAnotherUnityMcp.Editor.Models
                 
                 foreach (var type in types)
                 {
-                    // Check if the type has the MCPTool attribute
-                    if (type.GetCustomAttribute<MCPToolAttribute>() != null)
+                    // Check if the type has the MCPTool attribute and not MCPResource
+                    if (type.GetCustomAttribute<MCPToolAttribute>() != null && 
+                        type.GetCustomAttribute<MCPResourceAttribute>() == null)
                     {
                         // Check if it's a command class (ends with "Command")
                         if (type.Name.EndsWith("Command"))
@@ -180,12 +181,10 @@ namespace YetAnotherUnityMcp.Editor.Models
             // Find and register all resource handler classes with MCPResource attributes
             RegisterResourceHandlersFromAssembly(Assembly.GetExecutingAssembly());
             
-            // Also register model-based resources for backward compatibility
-            RegisterResourceFromType(typeof(UnityInfoResource));
-            RegisterResourceFromType(typeof(UnityLogsResource));
-            RegisterResourceFromType(typeof(UnitySceneResource));
-            RegisterResourceFromType(typeof(UnityObjectResource));
-            RegisterResourceFromType(typeof(UnitySchemaResource));
+            // Also explicitly register command classes that are marked as resources
+            RegisterResourceHandlerFromType(typeof(GetLogsCommand));
+            RegisterResourceHandlerFromType(typeof(GetUnityInfoCommand));
+            RegisterResourceHandlerFromType(typeof(GetSchemaCommand));
         }
         
         /// <summary>
@@ -204,8 +203,14 @@ namespace YetAnotherUnityMcp.Editor.Models
                     // Check if the type has the MCPResource attribute
                     if (type.GetCustomAttribute<MCPResourceAttribute>() != null)
                     {
+                        // Check if it's a command class (ends with "Command")
+                        if (type.Name.EndsWith("Command"))
+                        {
+                            // Command class marked as a resource
+                            RegisterResourceHandlerFromType(type);
+                        }
                         // Check if it's a resource handler class (ends with "Resource")
-                        if (type.Name.EndsWith("Resource") && !type.Name.EndsWith("ModelResource"))
+                        else if (type.Name.EndsWith("Resource") && !type.Name.EndsWith("ModelResource"))
                         {
                             RegisterResourceHandlerFromType(type);
                         }
