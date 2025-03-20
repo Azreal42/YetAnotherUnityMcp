@@ -130,6 +130,31 @@ class UnityWebSocketClient:
             Dictionary containing tools and resources information
         """
         return await self.ws_client.send_command("get_schema")
+        
+    async def has_command(self, command_name: str) -> bool:
+        """
+        Check if a command exists in the Unity schema.
+        
+        Args:
+            command_name: Name of the command to check
+            
+        Returns:
+            True if the command exists, False otherwise
+        """
+        try:
+            schema = await self.get_schema()
+            if not schema or not isinstance(schema, dict):
+                return False
+                
+            tools = schema.get('tools', [])
+            for tool in tools:
+                if tool.get('name') == command_name:
+                    return True
+                    
+            return False
+        except Exception as e:
+            logger.error(f"Error checking for command {command_name}: {str(e)}")
+            return False
     
     async def send_command(self, command: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """

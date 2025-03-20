@@ -9,7 +9,7 @@ namespace YetAnotherUnityMcp.Editor.Commands
     /// <summary>
     /// Command to get information about the Unity environment
     /// </summary>
-    [MCPTool("get_unity_info", "Get information about the Unity environment", "get_unity_info()")]
+    [MCPResourceAttribute("get_unity_info", "Get information about the Unity environment", "get_unity_info()")]
     public static class GetUnityInfoCommand
     {
         /// <summary>

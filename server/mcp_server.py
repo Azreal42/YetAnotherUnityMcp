@@ -33,12 +33,26 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     Yields:
         Empty dictionary for state (not used)
     """
+    from server.mcp.dynamic_tools import get_manager
+
     logger.info("Server starting: initializing Unity WebSocket client...")
     
     try:
         # Connect to Unity WebSocket server
         if await connect_to_unity():
             logger.info("Unity WebSocket client successfully connected")
+            
+            # Register dynamic tools from Unity schema
+            # Note: We need to pass the actual server instance here, which is the mcp object
+            # from the enclosing scope (global mcp variable defined below)
+            dynamic_manager = get_manager(mcp)
+            
+            # Register connected event handler for dynamic tool registration
+            unity_client.on("connected", lambda: register_dynamic_tools(dynamic_manager))
+            
+            # Initial registration
+            await register_dynamic_tools(dynamic_manager)
+            
         else:
             logger.warning("Unity WebSocket client failed to connect, MCP functions may not work")
         
@@ -49,6 +63,20 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
         logger.info("Server stopping: disconnecting Unity WebSocket client...")
         await unity_client.disconnect()
         logger.info("Unity WebSocket client disconnected")
+
+async def register_dynamic_tools(dynamic_manager):
+    """
+    Register dynamic tools from Unity schema.
+    
+    Args:
+        dynamic_manager: Dynamic tool manager instance
+    """
+    logger.info("Registering dynamic tools from Unity schema...")
+    result = await dynamic_manager.register_from_schema()
+    if result:
+        logger.info("Dynamic tools registered successfully")
+    else:
+        logger.warning("Failed to register dynamic tools")
 
 async def connect_to_unity(url: str = "ws://localhost:8080/") -> bool:
     """

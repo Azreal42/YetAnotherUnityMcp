@@ -287,6 +287,23 @@ The schema system uses C# attributes for automatic schema generation. This allow
 3. **Registration**:
    Tools and resources are registered in the Unity `MCPRegistry` class, which maintains a singleton instance with all available operations. The registration happens automatically using reflection on attributed classes.
 
+4. **Name Inference**:
+   When the `name` parameter of an attribute is set to `null`, the system automatically infers the name by:
+   - Converting the class or member name from CamelCase to snake_case
+   - Removing suffix words like "Command" or "Resource" 
+   - For example: `TakeScreenshotCommand` → `take_screenshot`
+
+5. **Testing**:
+   The schema system is thoroughly tested using NUnit tests in the Unity Test Framework:
+   - `MCPAttributeUtilTests`: Tests for the core schema generation functions
+     - `ConvertCamelCaseToSnakeCase_ReturnsCorrectResults`: Tests the name inference algorithm
+     - `GetTypeString_ReturnsCorrectTypeStrings`: Tests C# type conversion to schema types
+     - `CreateToolDescriptorFromCommandType_WithExplicitName_ReturnsCorrectDescriptor`: Tests explicit name schema generation
+     - `CreateToolDescriptorFromCommandType_WithInferredName_ReturnsCorrectDescriptor`: Tests name inference
+     - Tests for complex output schema generation from different return types
+   - `MCPRegistryTests`: Tests for the schema registration system
+   - `GetSchemaCommandTests`: Integration tests for the entire schema retrieval pipeline
+
 #### Example: Attribute-Based Command Definition
 
 ```csharp
@@ -359,6 +376,42 @@ public class ExecuteCodeTool
 ### Schema Retrieval
 
 Clients can retrieve the schema using the `get_schema` command, which returns a complete list of all available tools and resources with their input parameters, descriptions, and URL patterns.
+
+### Dynamic Tool Registration
+
+The Python MCP client can dynamically register tools and resources based on the schema received from Unity. This allows the Python side to automatically adapt to changes in the Unity API without requiring code changes. The dynamic registration process works as follows:
+
+1. **Connection Event**: When the WebSocket client successfully connects to Unity, it automatically retrieves the schema.
+
+2. **Schema Processing**: The `DynamicToolManager` processes the schema to extract tool and resource information.
+
+3. **Tool Registration**: For each tool in the schema, a dynamic function is created and registered with FastMCP.
+
+4. **Resource Registration**: For each resource in the schema, a dynamic resource handler is created and registered with FastMCP.
+
+5. **Parameter Mapping**: The dynamic functions automatically map parameters from the schema to the function signature.
+
+6. **Command Execution**: When a dynamic tool is invoked, the parameters are mapped to the command and sent to Unity.
+
+This system provides several benefits:
+
+- **Automatic API Adaptation**: The Python client automatically adapts to changes in the Unity API.
+- **No Code Generation**: No code generation or manual updates are required when new tools are added to Unity.
+- **Self-Documenting**: The schema provides complete documentation of available tools and their parameters.
+- **Type Safety**: Parameter types from the schema are used to validate inputs.
+
+Example of dynamic tool registration:
+
+```python
+# Get the dynamic tool manager
+from server.mcp.dynamic_tools import get_manager
+manager = get_manager(mcp_instance)
+
+# Register tools from schema
+await manager.register_from_schema()
+
+# All tools from Unity are now available in the MCP instance
+```
 
 ## Extensibility
 
