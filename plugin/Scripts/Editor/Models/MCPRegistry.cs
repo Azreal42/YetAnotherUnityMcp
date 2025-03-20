@@ -116,9 +116,8 @@ namespace YetAnotherUnityMcp.Editor.Models
                 
                 foreach (var type in types)
                 {
-                    // Check if the type has the MCPTool attribute and not MCPResource
-                    if (type.GetCustomAttribute<MCPToolAttribute>() != null && 
-                        type.GetCustomAttribute<MCPResourceAttribute>() == null)
+                    // Check if the type has the MCPTool attribute
+                    if (type.GetCustomAttribute<MCPToolAttribute>() != null)
                     {
                         // Check if it's a command class (ends with "Command")
                         if (type.Name.EndsWith("Command"))
