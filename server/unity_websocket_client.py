@@ -121,6 +121,15 @@ class UnityWebSocketClient:
             Unity environment information
         """
         return await self.ws_client.get_unity_info()
+        
+    async def get_schema(self) -> Any:
+        """
+        Get information about available tools and resources in Unity.
+        
+        Returns:
+            Dictionary containing tools and resources information
+        """
+        return await self.ws_client.send_command("get_schema")
     
     async def send_command(self, command: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """

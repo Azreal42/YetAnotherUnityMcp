@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEditor;
 using Newtonsoft.Json;
 using YetAnotherUnityMcp.Editor.Commands;
+using YetAnotherUnityMcp.Editor.Models;
 
 namespace YetAnotherUnityMcp.Editor.WebSocket
 {
@@ -311,6 +312,10 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
                             
                         case "get_unity_info":
                             result = GetUnityInfoCommand.Execute();
+                            break;
+                            
+                        case "get_schema":
+                            result = GetSchemaCommand.Execute();
                             break;
                             
                         default:

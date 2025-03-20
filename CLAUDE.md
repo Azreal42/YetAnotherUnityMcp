@@ -9,6 +9,11 @@ YetAnotherUnityMcp is a system that bridges the Unity game engine with AI-driven
 
 This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents to inspect and control a running Unity scene in a structured, safe manner.
 
+## Important Rules for Claude
+1. **Don't run code directly**: The Python venv is Windows-based while Claude runs on WSL - running tests directly will fail.
+2. **Update documentation**: Every time a new feature is implemented, update the relevant documentation in this file, README.md, and TECH_DETAILS.md to reflect the changes.
+3. **Keep code and documentation in sync**: Ensure schema definitions, function signatures, and documentation stay consistent.
+
 ## Project Architecture
 The project follows a server-client architecture with Unity hosting a WebSocket server and Python acting as the WebSocket client. The Python client then provides MCP protocol functionality for AI integration.
 
@@ -75,36 +80,6 @@ We use FastMCP for MCP integration, which provides:
 - Standard MCP primitives for AI interaction with Unity
 - Integration with Claude Desktop via `fastmcp` CLI tool
 
-## Commands
-```bash
-# Client (Python)
-cd server
-python -m pip install -e ".[dev]"     # Install with dev dependencies
-python -m server.mcp_server           # Run the MCP client with STDIO transport
-python -m pytest                      # Run all tests
-python -m pytest test_file.py         # Run a specific test file
-python -m pytest test_file.py::test_func # Run a single test
-python -m black .                     # Format Python code
-python -m flake8                      # Lint Python code
-python -m mypy .                      # Type-check Python code
-
-# MCP Integration 
-source $HOME/.local/bin/env           # Set up uv environment
-python -m server.mcp_server           # Run MCP client from command line
-
-# MCP Development
-fastmcp dev server/mcp_server.py      # Run with MCP Inspector UI
-
-# Claude Desktop Installation
-fastmcp install server/mcp_server.py       # Install in Claude Desktop
-fastmcp install server/mcp_server.py --name "Unity Controller" # Install with custom name
-fastmcp install server/mcp_server.py -e UNITY_URL=ws://localhost:8080/ # With environment variables
-
-# Plugin (C#)
-# Build and install Unity plugin via Unity Editor
-# Start the WebSocket server from MCP > WebSocket Server > Start Server
-```
-
 ## MCP Implementation
 Our MCP implementation consists of several key components:
 
@@ -129,82 +104,35 @@ Our MCP implementation consists of several key components:
 - **Command Structure**: Commands include parameters and metadata
 - **Response Structure**: Responses include results, errors, and timing information
 
-## FastMCP Examples
-```python
-# Create an MCP server with connection to Unity
-from fastmcp import FastMCP, Context, Image
-from contextlib import asynccontextmanager
-from server.unity_websocket_client import get_client
+## Commands
+```bash
+# Server (Python)
+cd server
+python -m pip install -e ".[dev]"     # Install with dev dependencies
+python -m uvicorn main:app --reload   # Run the traditional server with auto-reload
+python -m pytest                      # Run all tests
+python -m pytest test_file.py         # Run a specific test file
+python -m pytest test_file.py::test_func # Run a single test
+python -m black .                     # Format Python code
+python -m flake8                      # Lint Python code
+python -m mypy .                      # Type-check Python code
 
-# Setup lifespan management for connection lifecycle
-@asynccontextmanager
-async def server_lifespan(server):
-    # Initialize Unity client
-    unity_client = get_client("ws://localhost:8080/")
-    try:
-        # Connect when server starts
-        await unity_client.connect()
-        yield {}  # Server runs during this time
-    finally:
-        # Disconnect when server stops
-        await unity_client.disconnect()
+# MCP Integration 
+source $HOME/.local/bin/env           # Set up uv environment
+python -m server.mcp_server           # Run MCP server from command line
+python -m server.fastmcp_example      # Run simplified FastMCP example
 
-# Create FastMCP instance with lifespan manager
-mcp = FastMCP(
-    "Unity MCP", 
-    dependencies=["pillow", "websockets"],
-    lifespan=server_lifespan
-)
+# MCP Development
+fastmcp dev server/mcp_server.py           # Run with MCP Inspector UI
+fastmcp dev server/fastmcp_example.py      # Test simplified example
 
-# Utility for standardized client access and error handling
-async def execute_unity_operation(operation_name, operation, ctx):
-    client = get_client()
-    if not client.connected:
-        await client.connect()
-    try:
-        ctx.info(f"Executing {operation_name}...")
-        return await operation(client)
-    except Exception as e:
-        ctx.error(f"Error: {str(e)}")
-        raise
+# Claude Desktop Installation
+fastmcp install server/mcp_server.py       # Install in Claude Desktop
+fastmcp install server/fastmcp_example.py --name "Unity Simple" # Install simplified version
+fastmcp install server/mcp_server.py -e UNITY_PATH=/path/to/unity # With environment variables
 
-# Add a tool that AI can call
-@mcp.tool()
-async def execute_code_in_unity(code: str, ctx: Context) -> str:
-    """Execute C# code in Unity"""
-    try:
-        result = await execute_unity_operation(
-            "code execution",
-            lambda client: client.execute_code(code),
-            ctx
-        )
-        return str(result)
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-# Add a resource AI can access
-@mcp.resource("unity://scene/{scene_name}")
-async def get_scene(scene_name: str, ctx: Context) -> dict:
-    """Get information about a specific Unity scene"""
-    # Use custom C# code to get scene info
-    code = f"""
-        // C# code to get scene info
-        var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName("{scene_name}");
-        var result = new Dictionary<string, object>();
-        // Fill result dictionary with scene info
-        return JsonConvert.SerializeObject(result);
-    """
-    try:
-        result = await execute_unity_operation(
-            "scene retrieval",
-            lambda client: client.execute_code(code),
-            ctx
-        )
-        # Parse JSON result into dictionary
-        import json
-        return json.loads(result) if isinstance(result, str) else result
-    except Exception as e:
-        return {"error": str(e)}
+# Plugin (C#)
+# Build and install Unity plugin via Unity Editor
 ```
 
 ## Running the System
@@ -221,35 +149,6 @@ async def get_scene(scene_name: str, ctx: Context) -> dict:
    cd server
    python -m pip install -e ".[dev]"
    ```
-
-3. **Configure Claude Desktop (Optional)**:
-   ```bash
-   fastmcp install server/mcp_server.py --name "Unity Controller"
-   ```
-
-### Starting the System
-
-1. **Start the Unity WebSocket Server**:
-   - Open the Unity Editor with the plugin imported
-   - The server can auto-start if enabled (default behavior)
-   - Manual start: MCP > Server > Start Server
-   - UI control panel: Window > MCP Server
-
-2. **Run the Python MCP Client**:
-   - Start the client with `python -m server.mcp_server`
-   - For development: `fastmcp dev server/mcp_server.py`
-   - The client will automatically attempt to connect to Unity
-
-3. **Use from Claude Desktop**:
-   - In Claude: `/mcp add unity-mcp`
-   - Then use tools like: 
-     ```
-     /mcp run unity-mcp execute_code_in_unity --code "Debug.Log(\"Hello from Claude!\");"
-     ```
-   - Or get resources:
-     ```
-     /mcp get unity-mcp unity://info
-     ```
 
 ### Communication Flow
 

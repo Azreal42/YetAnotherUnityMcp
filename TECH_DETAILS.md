@@ -13,6 +13,8 @@ The Unity side is implemented as a typical Unity plugin with separate editor cod
 3. **WebSocketServerMCPWindow**: Editor window for managing and monitoring the server.
 4. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
 5. **WebSocketMessages**: Message types for handling communication (requests, responses, errors).
+6. **MCPRegistry**: Registry for tools and resources with schema information.
+7. **MCPToolSchema**: Schema models for tools and resources (ToolDescriptor, ResourceDescriptor, etc.).
 
 ### Python Client Structure
 
@@ -23,6 +25,10 @@ The Python client uses the FastMCP framework to define the available actions and
 3. **websocket_client.py**: The low-level WebSocket client implementation.
 4. **mcp/unity_client_util.py**: Utility functions for standardized client operations.
 5. **mcp/tools/**: Tool implementations for MCP with unified execution pattern.
+   - **mcp/tools/get_schema.py**: Tool for retrieving available tools and resources information
+   - **mcp/tools/execute_code.py**: Tool for executing C# code in Unity
+   - **mcp/tools/take_screenshot.py**: Tool for capturing Unity screenshots
+   - And others...
 6. **mcp/resources/**: Resource implementations for MCP with standardized error handling.
 
 The client can run in two modes:
@@ -114,6 +120,7 @@ By default, the system defines a set of commands that the Unity server will reco
 - `modify_object`: Modify properties of a Unity GameObject.
 - `get_logs`: Get recent Unity console logs.
 - `get_unity_info`: Get information about the Unity environment.
+- `get_schema`: Retrieve information about all available tools and resources.
 
 ## WebSocket Implementation Details
 
@@ -177,20 +184,169 @@ The system is designed to handle errors gracefully and maintain security:
 
 5. **Connection Monitoring**: Performance metrics are tracked and logged for monitoring connection health.
 
+## Schema System
+
+The system includes a schema retrieval mechanism that provides self-documentation of available tools and resources. This allows clients to discover what operations are available without hardcoding knowledge of the API.
+
+### Schema Structure
+
+The schema information is organized as follows:
+
+```json
+{
+  "tools": [
+    {
+      "name": "execute_code",
+      "description": "Execute C# code in Unity",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "C# code to execute",
+            "required": true
+          }
+        },
+        "required": ["code"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "string",
+            "description": "String representation of the return value",
+            "required": true
+          },
+          "logs": {
+            "type": "array",
+            "description": "Array of log messages generated during execution",
+            "required": true
+          },
+          "returnValue": {
+            "type": "object",
+            "description": "The actual return value (if serializable)",
+            "required": false
+          }
+        }
+      },
+      "example": "execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")"
+    }
+  ],
+  "resources": [
+    {
+      "name": "unity_info",
+      "description": "Get information about the Unity environment",
+      "urlPattern": "unity://info",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "unityVersion": {
+            "type": "string",
+            "description": "Version of Unity Editor",
+            "required": true
+          },
+          "platform": {
+            "type": "string",
+            "description": "Platform the Unity Editor is running on",
+            "required": true
+          },
+          "isPlaying": {
+            "type": "boolean",
+            "description": "Whether the Unity Editor is in play mode",
+            "required": true
+          },
+          "activeScenes": {
+            "type": "array",
+            "description": "List of active scene names",
+            "required": true
+          }
+        }
+      },
+      "example": "unity://info"
+    }
+  ]
+}
+```
+
+### Schema Registration and Discovery
+
+The schema system uses C# attributes for automatic schema generation. This allows for a more maintainable and type-safe approach to schema definition. The key components are:
+
+1. **Attribute-Based Schema Definition**:
+   - `MCPToolAttribute`: Marks a class as an MCP tool with name, description, and example
+   - `MCPResourceAttribute`: Marks a class as an MCP resource with name, description, URL pattern, and example
+   - `MCPSchemaAttribute`: Marks nested classes as input or output schemas
+   - `MCPParameterAttribute`: Defines parameters for inputs and outputs with type information
+
+2. **Introspection**:
+   The `MCPAttributeUtil` class provides methods to extract schema information from attributed classes through reflection:
+   - `CreateToolDescriptorFromType`: Creates a tool descriptor from a class with attributes
+   - `CreateResourceDescriptorFromType`: Creates a resource descriptor from a class with attributes
+   - `GetSchemaFromType`: Extracts schema information from input/output model classes
+
+3. **Registration**:
+   Tools and resources are registered in the Unity `MCPRegistry` class, which maintains a singleton instance with all available operations. The registration happens automatically using reflection on attributed classes.
+
+#### Example: Attribute-Based Tool Definition
+
+```csharp
+/// <summary>
+/// Execute code in Unity MCP tool
+/// </summary>
+[MCPTool("execute_code", "Execute C# code in Unity", "execute_code(\"Debug.Log(\\\"Hello\\\"); return 42;\")")]
+public class ExecuteCodeTool
+{
+    /// <summary>
+    /// Input schema for execute_code command
+    /// </summary>
+    [MCPSchema("Input parameters for the execute_code command")]
+    public class InputModel
+    {
+        /// <summary>
+        /// C# code to execute
+        /// </summary>
+        [MCPParameter("code", "C# code to execute", "string", true)]
+        public string Code { get; set; }
+    }
+    
+    /// <summary>
+    /// Output schema for execute_code command
+    /// </summary>
+    [MCPSchema("Output results from the execute_code command", "output")]
+    public class OutputModel
+    {
+        /// <summary>
+        /// String representation of the return value
+        /// </summary>
+        [MCPParameter("output", "String representation of the return value", "string", true)]
+        public string Output { get; set; }
+        
+        // Other output parameters...
+    }
+}
+
+### Schema Retrieval
+
+Clients can retrieve the schema using the `get_schema` command, which returns a complete list of all available tools and resources with their input parameters, descriptions, and URL patterns.
+
 ## Extensibility
 
 The system is designed to be extensible:
 
 1. **Adding New Commands**: To add a new command:
+   - Create a new tool class with MCPToolAttribute and input/output schema models
    - Add command handling in MCPWebSocketServer.cs ProcessCommandRequest method
    - Add a matching command method in UnityWebSocketClient
    - Create a new tool implementation file in server/mcp/tools/
    - Use the unified execution pattern with execute_unity_operation
+   - Register the tool class in MCPRegistry.RegisterBuiltInTools()
    - Register the tool in mcp/tools/__init__.py
 
 2. **Adding New Resources**: To add a new resource:
+   - Create a new resource class with MCPResourceAttribute and output schema model
    - Implement the resource handler in server/mcp/resources/
    - Use the unified execution pattern with execute_unity_operation
+   - Register the resource class in MCPRegistry.RegisterBuiltInResources()
    - Register it with the MCP system in mcp/resources/__init__.py
    - Either use existing commands or add a new command if needed
 

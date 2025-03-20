@@ -6,6 +6,7 @@ from server.mcp.tools.take_screenshot import register_take_screenshot
 from server.mcp.tools.modify_object import register_modify_object
 from server.mcp.tools.get_logs import register_get_logs
 from server.mcp.tools.get_unity_info import register_get_unity_info
+from server.mcp.tools.get_schema import register_get_schema
 
 def init_mcp(mcp_instance: FastMCP) -> None:
     """Register all MCP tools with the given MCP instance"""
@@ -14,5 +15,6 @@ def init_mcp(mcp_instance: FastMCP) -> None:
     register_modify_object(mcp_instance)
     register_get_logs(mcp_instance)
     register_get_unity_info(mcp_instance)
+    register_get_schema(mcp_instance)
 
 __all__ = ["init_mcp"]
