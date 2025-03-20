@@ -9,10 +9,10 @@ import time
 import logging
 from typing import Dict, List, Any, AsyncIterator
 from contextlib import asynccontextmanager
+from mcp.server.fastmcp import FastMCP
 
 # Import components
 from server.unity_websocket_client import UnityWebSocketClient, get_client
-from server.mcp import init_mcp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +42,12 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
         # Get the connection manager
         connection_manager = get_unity_connection_manager()
         
+        # Register connected event handler for dynamic tool registration through the connection manager
+        async def connected_callback():
+            logger.info("Connection established, registering dynamic tools...")
+            await register_dynamic_tools(dynamic_manager)
+        connection_manager.add_connection_listener(connected_callback)
+
         # Connect to Unity WebSocket server
         if await connection_manager.connect():
             logger.info("Unity WebSocket client successfully connected")
@@ -50,13 +56,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
             # Note: We need to pass the actual server instance here, which is the mcp object
             # from the enclosing scope (global mcp variable defined below)
             dynamic_manager = get_manager(mcp)
-            
-            # Register connected event handler for dynamic tool registration through the connection manager
-            async def connected_callback():
-                logger.info("Connection established, registering dynamic tools...")
-                await register_dynamic_tools(dynamic_manager)
-            connection_manager.add_connection_listener(connected_callback)
-            
+                        
             # Initial registration
             await register_dynamic_tools(dynamic_manager)
             
@@ -105,7 +105,7 @@ async def connect_to_unity(url: str = "ws://localhost:8080/") -> bool:
     return await connection_manager.connect(url)
 
 # Create FastMCP instance
-from fastmcp import FastMCP
+
 mcp: FastMCP = FastMCP(
     "Unity MCP WebSocket Client",
     description="WebSocket-based Model Context Protocol for Unity Integration (Client Mode)",

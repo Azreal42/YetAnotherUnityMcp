@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10"
 
 [[package]]
@@ -111,23 +110,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/28/c5d26e5860df807241909a961a37d45e10533acef95fc368066c7dd186cd/fastapi-0.115.11.tar.gz", hash = "sha256:cc81f03f688678b92600a65a5e618b93592c65005db37157147204d8924bf94f", size = 294441 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/5d/4d8bbb94f0dbc22732350c06965e40740f4a92ca560e90bb566f4f73af41/fastapi-0.115.11-py3-none-any.whl", hash = "sha256:32e1541b7b74602e4ef4a0260ecaf3aadf9d4f19590bba3e1bf2ac4666aa2c64", size = 94926 },
-]
-
-[[package]]
-name = "fastmcp"
-version = "0.4.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-dotenv" },
-    { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/84/17b549133263d7ee77141970769bbc401525526bf1af043ea6842bce1a55/fastmcp-0.4.1.tar.gz", hash = "sha256:713ad3b8e4e04841c9e2f3ca022b053adb89a286ceffad0d69ae7b56f31cbe64", size = 785575 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/0b/008a340435fe8f0879e9d608f48af2737ad48440e09bd33b83b3fd03798b/fastmcp-0.4.1-py3-none-any.whl", hash = "sha256:664b42c376fb89ec90a50c9433f5a1f4d24f36696d6c41b024b427ae545f9619", size = 35282 },
 ]
 
 [[package]]
@@ -246,6 +228,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/50/cc/5c5bb19f1a0f8f89a95e25cb608b0b07009e81fd4b031e519335404e1422/mcp-1.4.1.tar.gz", hash = "sha256:b9655d2de6313f9d55a7d1df62b3c3fe27a530100cc85bf23729145b0dba4c7a", size = 154942 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/0e/885f156ade60108e67bf044fada5269da68e29d758a10b0c513f4d85dd76/mcp-1.4.1-py3-none-any.whl", hash = "sha256:a7716b1ec1c054e76f49806f7d96113b99fc1166fc9244c2c6f19867cb75b593", size = 72448 },
+]
+
+[package.optional-dependencies]
+cli = [
+    { name = "python-dotenv" },
+    { name = "typer" },
 ]
 
 [[package]]
@@ -823,9 +811,8 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "fastmcp" },
     { name = "httpx" },
-    { name = "mcp" },
+    { name = "mcp", extra = ["cli"] },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -846,11 +833,10 @@ dev = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "fastapi", specifier = ">=0.100.0" },
-    { name = "fastmcp", specifier = ">=0.4.1" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
-    { name = "mcp", specifier = ">=0.1.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.4.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=1.20.0" },
     { name = "pillow", specifier = ">=10.0.0" },
@@ -859,4 +845,3 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.22.0" },
     { name = "websockets", specifier = ">=11.0.0" },
 ]
-provides-extras = ["dev"]

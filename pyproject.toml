@@ -16,9 +16,8 @@ dependencies = [
     "websockets>=11.0.0",
     "pillow>=10.0.0", # For image processing
     "numpy>=1.20.0", # For numerical operations
-    "mcp>=0.1.0", # Model Context Protocol
+    "mcp[cli]>=1.4.1", # Model Context Protocol
     "httpx>=0.24.0", # For HTTP requests
-    "fastmcp>=0.4.1",
 ]
 
 [project.optional-dependencies]
