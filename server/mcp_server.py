@@ -11,7 +11,7 @@ from typing import Dict, List, Any
 import logging
 
 # Import components
-from server.mcp_client import MCPClient, get_client
+from server.unity_websocket_client import UnityWebSocketClient, get_client
 from server.mcp import init_mcp
 
 # Configure logging
@@ -26,8 +26,8 @@ mcp: FastMCP = FastMCP(
     dependencies=["pillow", "websockets"]
 )
 
-# Initialize MCP client
-unity_client: MCPClient = get_client()
+# Initialize Unity WebSocket client
+unity_client: UnityWebSocketClient = get_client()
 
 # Initialize and register MCP tools and resources
 init_mcp(mcp)

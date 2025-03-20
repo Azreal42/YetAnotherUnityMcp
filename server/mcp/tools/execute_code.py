@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 from fastmcp import FastMCP, Context
-from server.mcp_client import get_client
+from server.unity_websocket_client import get_client
 
 logger = logging.getLogger("mcp_tools")
 

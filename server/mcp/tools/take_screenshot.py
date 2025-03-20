@@ -4,7 +4,7 @@ import logging
 import base64
 from typing import Any, Optional
 from fastmcp import FastMCP, Context, Image
-from server.mcp_client import get_client
+from server.unity_websocket_client import get_client
 import os
 
 logger = logging.getLogger("mcp_tools")
