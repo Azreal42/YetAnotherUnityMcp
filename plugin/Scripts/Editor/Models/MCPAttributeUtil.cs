@@ -497,9 +497,21 @@ namespace YetAnotherUnityMcp.Editor.Models
             for (int i = 1; i < text.Length; i++)
             {
                 char c = text[i];
+                
+                // Special case for adjacent uppercase letters - only add underscore before a capital 
+                // if the next letter is lowercase or the previous letter is lowercase
                 if (char.IsUpper(c))
                 {
-                    sb.Append('_');
+                    // Check if this is part of an acronym (consecutive uppercase letters)
+                    bool isPartOfAcronym = i + 1 < text.Length && char.IsUpper(text[i + 1]) && 
+                                          (i - 1 >= 0 && char.IsUpper(text[i - 1]));
+                    
+                    // Only add underscore if not part of an acronym or it's the start of a new word
+                    if (!isPartOfAcronym || (i > 1 && !char.IsUpper(text[i - 1])))
+                    {
+                        sb.Append('_');
+                    }
+                    
                     sb.Append(char.ToLowerInvariant(c));
                 }
                 else
