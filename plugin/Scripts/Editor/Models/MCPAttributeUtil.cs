@@ -314,11 +314,17 @@ namespace YetAnotherUnityMcp.Editor.Models
                 }
                 else if (returnType.IsClass || returnType.IsValueType)
                 {
+                    // Check if the type is a dictionary
+                    bool isDictionary = returnType.IsGenericType && 
+                                      (returnType.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
+                                       returnType.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+                    
                     // Complex return type - check for properties with attributes
                     var props = returnType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                     
-                    if (props.Length > 0)
+                    if (props.Length > 0 && !isDictionary)
                     {
+                        // For complex types with properties, add each property to the schema
                         foreach (var prop in props)
                         {
                             string propName = prop.Name;
@@ -327,13 +333,13 @@ namespace YetAnotherUnityMcp.Editor.Models
                             string description = $"{propName} property";
                             
                             // Check for MCPParameter attribute
-                            var propAttr = prop.GetCustomAttribute<MCPParameterAttribute>();
-                            if (propAttr != null)
+                            var paramAttr = prop.GetCustomAttribute<MCPParameterAttribute>();
+                            if (paramAttr != null)
                             {
-                                propName = propAttr.Name ?? propName;
-                                propType = propAttr.Type ?? propType;
-                                isRequired = propAttr.Required;
-                                description = propAttr.Description;
+                                propName = paramAttr.Name ?? propName;
+                                propType = paramAttr.Type ?? propType;
+                                isRequired = paramAttr.Required;
+                                description = paramAttr.Description;
                             }
                             
                             // Add to schema
@@ -344,10 +350,21 @@ namespace YetAnotherUnityMcp.Editor.Models
                                 Required = isRequired
                             };
                         }
+                        
+                        // Also add a generic result property for compatibility
+                        if (!descriptor.OutputSchema.Properties.ContainsKey(returnTypeName))
+                        {
+                            descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
+                            {
+                                Type = "object",
+                                Description = $"Complete result of the {resourceName} resource",
+                                Required = true
+                            };
+                        }
                     }
                     else
                     {
-                        // No properties, treat as opaque object
+                        // For dictionaries or types with no properties, treat as opaque object
                         descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
                         {
                             Type = "object",
@@ -356,6 +373,17 @@ namespace YetAnotherUnityMcp.Editor.Models
                         };
                     }
                 }
+            }
+            
+            // Ensure there's always a result property in the output schema
+            if (descriptor.OutputSchema.Properties.Count == 0)
+            {
+                descriptor.OutputSchema.Properties["result"] = new ParameterDescriptor
+                {
+                    Type = "object",
+                    Description = $"Result of the {resourceName} resource",
+                    Required = true
+                };
             }
             
             return descriptor;
