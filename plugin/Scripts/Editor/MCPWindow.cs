@@ -2,15 +2,40 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using YetAnotherUnityMcp.Editor.Commands;
+using YetAnotherUnityMcp.Editor.WebSocket;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
 
 namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
-    /// Editor window for MCP controls
+    /// Static initializer for MCP WebSocket Server
+    /// </summary>
+    [InitializeOnLoad]
+    public static class MCPServerInitializer
+    {
+        static MCPServerInitializer()
+        {
+            // Set up automatic server cleanup when editor is shutting down
+            EditorApplication.quitting += () => 
+            {
+                Debug.Log("[MCP Server] Unity Editor shutting down, stopping WebSocket server...");
+                _ = WebSocket.MCPWebSocketServer.Instance.StopAsync();
+            };
+            
+            // Log initialization
+            Debug.Log("[MCP Server] MCP WebSocket Server module initialized");
+        }
+    }
+
+    /// <summary>
+    /// Editor window for MCP server controls
     /// </summary>
     public class MCPWindow : EditorWindow
     {
-        private string serverUrl = "http://localhost:8000";
+        private string hostname = "localhost";
+        private int port = 8080;
         private string codeToExecute = "Debug.Log(\"Hello from MCP!\");";
         private string screenshotPath = "Assets/screenshot.png";
         private Vector2Int screenshotResolution = new Vector2Int(1920, 1080);
@@ -18,241 +43,366 @@ namespace YetAnotherUnityMcp.Editor
         private string propertyName = "position.x";
         private string propertyValue = "10";
 
-        private bool isConnected = false;
         private string lastResponse = "";
         private Vector2 scrollPosition;
+        private List<string> connectedClients = new List<string>();
+        private string lastError = "";
+        private bool showSettings = true;
+        private bool showActions = true;
+        private bool showClients = true;
+        private bool showResponse = true;
 
-        [MenuItem("Window/MCP Client")]
+        [MenuItem("Window/MCP Server")]
         public static void ShowWindow()
         {
-            MCPWindow window = GetWindow<MCPWindow>("MCP Client");
+            MCPWindow window = GetWindow<MCPWindow>("MCP Server");
             window.minSize = new Vector2(400, 500);
             window.Show();
         }
 
+        private void OnEnable()
+        {
+            // Subscribe to server events
+            WebSocket.MCPWebSocketServer.Instance.OnServerStarted += HandleServerStarted;
+            WebSocket.MCPWebSocketServer.Instance.OnServerStopped += HandleServerStopped;
+            WebSocket.MCPWebSocketServer.Instance.OnClientConnected += HandleClientConnected;
+            WebSocket.MCPWebSocketServer.Instance.OnClientDisconnected += HandleClientDisconnected;
+            WebSocket.MCPWebSocketServer.Instance.OnError += HandleError;
+        }
+
+        private void OnDisable()
+        {
+            // Unsubscribe from server events to prevent memory leaks
+            WebSocket.MCPWebSocketServer.Instance.OnServerStarted -= HandleServerStarted;
+            WebSocket.MCPWebSocketServer.Instance.OnServerStopped -= HandleServerStopped;
+            WebSocket.MCPWebSocketServer.Instance.OnClientConnected -= HandleClientConnected;
+            WebSocket.MCPWebSocketServer.Instance.OnClientDisconnected -= HandleClientDisconnected;
+            WebSocket.MCPWebSocketServer.Instance.OnError -= HandleError;
+        }
+
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Unity MCP Client", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Unity MCP Server", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            DrawServerSettings();
-            EditorGUILayout.Space();
+            bool isRunning = WebSocket.MCPWebSocketServer.Instance.IsRunning;
 
-            DrawConnectionStatus();
-            EditorGUILayout.Space();
-
-            DrawActions();
-            EditorGUILayout.Space();
-
-            DrawResponsePanel();
-        }
-
-        private void DrawServerSettings()
-        {
-            EditorGUILayout.LabelField("Server Settings", EditorStyles.boldLabel);
-            serverUrl = EditorGUILayout.TextField("Server URL", serverUrl);
-        }
-
-        private void DrawConnectionStatus()
-        {
+            // Server status and controls
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Connection Status:", isConnected ? "Connected" : "Disconnected");
+            EditorGUILayout.LabelField("Server Status:", isRunning ? 
+                $"Running on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}" : 
+                "Stopped");
             
-            if (GUILayout.Button(isConnected ? "Disconnect" : "Connect"))
+            if (GUILayout.Button(isRunning ? "Stop Server" : "Start Server"))
             {
-                if (!isConnected)
+                if (!isRunning)
                 {
-                    Connect();
+                    StartServer();
                 }
                 else
                 {
-                    isConnected = false;
-                    lastResponse = "Disconnected from server";
+                    StopServer();
                 }
             }
             EditorGUILayout.EndHorizontal();
-        }
-
-        private void DrawActions()
-        {
-            EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
             
-            // Execute code section
-            EditorGUILayout.LabelField("Execute Code");
-            codeToExecute = EditorGUILayout.TextArea(codeToExecute, GUILayout.Height(100));
-            if (GUILayout.Button("Execute"))
+            EditorGUILayout.Space();
+
+            // Server settings
+            showSettings = EditorGUILayout.Foldout(showSettings, "Server Settings", true);
+            if (showSettings)
             {
-                ExecuteCode();
+                EditorGUI.BeginDisabledGroup(isRunning);
+                hostname = EditorGUILayout.TextField("Hostname", hostname);
+                port = EditorGUILayout.IntField("Port", port);
+                EditorGUI.EndDisabledGroup();
             }
             
             EditorGUILayout.Space();
             
-            // Screenshot section
-            EditorGUILayout.LabelField("Take Screenshot");
-            screenshotPath = EditorGUILayout.TextField("Output Path", screenshotPath);
-            screenshotResolution = EditorGUILayout.Vector2IntField("Resolution", screenshotResolution);
-            if (GUILayout.Button("Take Screenshot"))
+            // Connected clients
+            showClients = EditorGUILayout.Foldout(showClients, $"Connected Clients ({connectedClients.Count})", true);
+            if (showClients && connectedClients.Count > 0)
             {
-                TakeScreenshot();
+                EditorGUI.indentLevel++;
+                foreach (var clientId in connectedClients)
+                {
+                    EditorGUILayout.LabelField(clientId);
+                }
+                EditorGUI.indentLevel--;
+            }
+            
+            EditorGUILayout.Space();
+
+            // Local command testing interface
+            showActions = EditorGUILayout.Foldout(showActions, "Local Command Testing", true);
+            if (showActions)
+            {
+                EditorGUILayout.HelpBox("These actions can be used to test commands locally without a client connection.", MessageType.Info);
+                
+                // Execute code section
+                EditorGUILayout.LabelField("Execute Code", EditorStyles.boldLabel);
+                codeToExecute = EditorGUILayout.TextArea(codeToExecute, GUILayout.Height(100));
+                if (GUILayout.Button("Execute"))
+                {
+                    ExecuteCode();
+                }
+                
+                EditorGUILayout.Space();
+                
+                // Screenshot section
+                EditorGUILayout.LabelField("Take Screenshot", EditorStyles.boldLabel);
+                screenshotPath = EditorGUILayout.TextField("Output Path", screenshotPath);
+                screenshotResolution = EditorGUILayout.Vector2IntField("Resolution", screenshotResolution);
+                if (GUILayout.Button("Take Screenshot"))
+                {
+                    TakeScreenshot();
+                }
+                
+                EditorGUILayout.Space();
+                
+                // Modify object section
+                EditorGUILayout.LabelField("Modify Object", EditorStyles.boldLabel);
+                objectId = EditorGUILayout.TextField("Object ID", objectId);
+                propertyName = EditorGUILayout.TextField("Property Path", propertyName);
+                propertyValue = EditorGUILayout.TextField("Property Value", propertyValue);
+                if (GUILayout.Button("Modify Object"))
+                {
+                    ModifyObject();
+                }
+                
+                EditorGUILayout.Space();
+                
+                // Get logs section
+                if (GUILayout.Button("Get Logs"))
+                {
+                    GetLogs();
+                }
+                
+                // Get Unity info section
+                if (GUILayout.Button("Get Unity Info"))
+                {
+                    GetUnityInfo();
+                }
             }
             
             EditorGUILayout.Space();
             
-            // Modify object section
-            EditorGUILayout.LabelField("Modify Object");
-            objectId = EditorGUILayout.TextField("Object ID", objectId);
-            propertyName = EditorGUILayout.TextField("Property Name", propertyName);
-            propertyValue = EditorGUILayout.TextField("Property Value", propertyValue);
-            if (GUILayout.Button("Modify Object"))
+            // Response and error display
+            if (!string.IsNullOrEmpty(lastError))
             {
-                ModifyObject();
+                EditorGUILayout.HelpBox(lastError, MessageType.Error);
             }
             
+            showResponse = EditorGUILayout.Foldout(showResponse, "Response", true);
+            if (showResponse)
+            {
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(100));
+                EditorGUILayout.TextArea(lastResponse);
+                EditorGUILayout.EndScrollView();
+            }
+            
+            // Performance monitor controls
             EditorGUILayout.Space();
-            
-            // Get logs section
-            if (GUILayout.Button("Get Logs"))
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Log Performance Stats"))
             {
-                GetLogs();
+                CommandExecutionMonitor.Instance.LogPerformanceReport();
             }
-            
-            // Get Unity info section
-            if (GUILayout.Button("Get Unity Info"))
+            if (GUILayout.Button("Clear Stats"))
             {
-                GetUnityInfo();
+                CommandExecutionMonitor.Instance.ClearMetrics();
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            // Force refresh the UI periodically
+            if (EditorApplication.timeSinceStartup % 1 < 0.016f)
+            {
+                Repaint();
             }
         }
 
-        private void DrawResponsePanel()
+        #region Server Control Methods
+        
+        private async void StartServer()
         {
-            EditorGUILayout.LabelField("Response", EditorStyles.boldLabel);
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(100));
-            EditorGUILayout.TextArea(lastResponse);
-            EditorGUILayout.EndScrollView();
-        }
-
-        private async void Connect()
-        {
-            if (string.IsNullOrEmpty(serverUrl))
+            lastError = "";
+            lastResponse = "Starting server...";
+            
+            try
             {
-                lastResponse = "Server URL cannot be empty";
-                return;
+                bool success = await WebSocket.MCPWebSocketServer.Instance.StartAsync(hostname, port);
+                if (success)
+                {
+                    lastResponse = $"Server started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}";
+                }
+                else
+                {
+                    lastError = "Failed to start server";
+                }
             }
-
-            lastResponse = "Connecting to server...";
-            
-            // Initialize the connection with WebSocket
-            MCPConnection.Initialize(serverUrl, true); // Use true to enable local fallback if connection fails
-            
-            // Connect to the server
-            bool success = await MCPConnection.Connect();
-            
-            isConnected = success;
-            if (success)
+            catch (Exception ex)
             {
-                lastResponse = "Connected to server";
-            }
-            else
-            {
-                lastResponse = "Failed to connect to server";
+                lastError = $"Error starting server: {ex.Message}";
+                Debug.LogError($"[MCP Server] {lastError}");
             }
             
-            // Force UI update
             Repaint();
         }
-
-        private async void ExecuteCode()
+        
+        private async void StopServer()
         {
-            if (!isConnected)
+            lastError = "";
+            lastResponse = "Stopping server...";
+            
+            try
             {
-                lastResponse = "Not connected to server. Please connect first.";
-                return;
+                await WebSocket.MCPWebSocketServer.Instance.StopAsync();
+                lastResponse = "Server stopped";
+                connectedClients.Clear();
             }
-
-            lastResponse = "Executing code...";
+            catch (Exception ex)
+            {
+                lastError = $"Error stopping server: {ex.Message}";
+                Debug.LogError($"[MCP Server] {lastError}");
+            }
             
-            // Execute code through the MCPConnection
-            lastResponse = await MCPConnection.ExecuteCode(codeToExecute);
-            
-            // Force UI update
             Repaint();
         }
-
-        private async void TakeScreenshot()
+        
+        #endregion
+        
+        #region Server Event Handlers
+        
+        private void HandleServerStarted()
         {
-            if (!isConnected)
-            {
-                lastResponse = "Not connected to server. Please connect first.";
-                return;
-            }
-
-            lastResponse = "Taking screenshot...";
-            
-            // Take screenshot through the MCPConnection
-            lastResponse = await MCPConnection.TakeScreenshot(screenshotPath, screenshotResolution);
-            
-            // Force UI update
+            lastResponse = $"Server started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}";
             Repaint();
         }
-
-        private async void ModifyObject()
+        
+        private void HandleServerStopped()
         {
-            if (!isConnected)
-            {
-                lastResponse = "Not connected to server. Please connect first.";
-                return;
-            }
-
-            lastResponse = "Modifying object...";
-            
-            // Try to parse property value as float first
-            float floatValue;
-            object value = propertyValue;
-            
-            if (float.TryParse(propertyValue, out floatValue))
-            {
-                value = floatValue;
-            }
-            
-            // Modify object through the MCPConnection
-            lastResponse = await MCPConnection.ModifyObject(objectId, propertyName, value);
-            
-            // Force UI update
+            lastResponse = "Server stopped";
+            connectedClients.Clear();
             Repaint();
         }
-
-        private async void GetLogs()
+        
+        private void HandleClientConnected(string clientId)
         {
-            if (!isConnected)
+            if (!connectedClients.Contains(clientId))
             {
-                lastResponse = "Not connected to server. Please connect first.";
-                return;
+                connectedClients.Add(clientId);
             }
-
-            lastResponse = "Getting logs...";
-            
-            // Get logs through the MCPConnection
-            lastResponse = await MCPConnection.GetLogs();
-            
-            // Force UI update
+            lastResponse = $"Client connected: {clientId}";
             Repaint();
         }
-
-        private async void GetUnityInfo()
+        
+        private void HandleClientDisconnected(string clientId)
         {
-            if (!isConnected)
-            {
-                lastResponse = "Not connected to server. Please connect first.";
-                return;
-            }
-
-            lastResponse = "Getting Unity info...";
-            
-            // Get Unity info through the MCPConnection
-            lastResponse = await MCPConnection.GetUnityInfo();
-            
-            // Force UI update
+            connectedClients.Remove(clientId);
+            lastResponse = $"Client disconnected: {clientId}";
             Repaint();
         }
+        
+        private void HandleError(string error)
+        {
+            lastError = error;
+            Repaint();
+        }
+        
+        #endregion
+        
+        #region Local Command Execution Methods
+        
+        private void ExecuteCode()
+        {
+            try
+            {
+                var result = ExecuteCodeCommand.Execute(codeToExecute);
+                lastResponse = $"Result: {result}";
+                lastError = "";
+            }
+            catch (Exception ex)
+            {
+                lastError = $"Error executing code: {ex.Message}";
+            }
+            
+            Repaint();
+        }
+        
+        private void TakeScreenshot()
+        {
+            try
+            {
+                var result = TakeScreenshotCommand.Execute(screenshotPath, screenshotResolution.x, screenshotResolution.y);
+                lastResponse = $"Screenshot saved: {result}";
+                lastError = "";
+            }
+            catch (Exception ex)
+            {
+                lastError = $"Error taking screenshot: {ex.Message}";
+            }
+            
+            Repaint();
+        }
+        
+        private void ModifyObject()
+        {
+            try
+            {
+                // Try to parse property value as float first
+                float floatValue;
+                object value = propertyValue;
+                
+                if (float.TryParse(propertyValue, out floatValue))
+                {
+                    value = floatValue;
+                }
+                
+                var result = ModifyObjectCommand.Execute(objectId, propertyName, value);
+                lastResponse = $"Object modified: {result}";
+                lastError = "";
+            }
+            catch (Exception ex)
+            {
+                lastError = $"Error modifying object: {ex.Message}";
+            }
+            
+            Repaint();
+        }
+        
+        private void GetLogs()
+        {
+            try
+            {
+                var result = GetLogsCommand.Execute(100);
+                lastResponse = $"Logs: {result}";
+                lastError = "";
+            }
+            catch (Exception ex)
+            {
+                lastError = $"Error getting logs: {ex.Message}";
+            }
+            
+            Repaint();
+        }
+        
+        private void GetUnityInfo()
+        {
+            try
+            {
+                var result = GetUnityInfoCommand.Execute();
+                lastResponse = $"Unity info: {result}";
+                lastError = "";
+            }
+            catch (Exception ex)
+            {
+                lastError = $"Error getting Unity info: {ex.Message}";
+            }
+            
+            Repaint();
+        }
+        
+        #endregion
     }
 }

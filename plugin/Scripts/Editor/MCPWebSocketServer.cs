@@ -263,7 +263,7 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             try
             {
                 // Use the performance monitor to track execution time
-                using (var timer = WebSocketPerformanceMonitor.Instance.StartOperation($"Command_{command}"))
+                using (var timer = CommandExecutionMonitor.Instance.StartOperation($"Command_{command}"))
                 {
                     // Track the start time for our own logging
                     long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
