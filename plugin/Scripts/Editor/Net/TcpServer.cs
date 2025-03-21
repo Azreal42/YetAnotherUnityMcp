@@ -33,6 +33,50 @@ namespace YetAnotherUnityMcp.Editor.Net
             Debug.LogError($"[TCP Server] Error: {errorMessage}");
             OnError?.Invoke(errorMessage);
         }
+        
+        /// <summary>
+        /// Raises the OnStarted event
+        /// </summary>
+        public void RaiseStarted()
+        {
+            OnStarted?.Invoke();
+        }
+        
+        /// <summary>
+        /// Raises the OnStopped event
+        /// </summary>
+        public void RaiseStopped()
+        {
+            OnStopped?.Invoke();
+        }
+        
+        /// <summary>
+        /// Raises the OnMessageReceived event
+        /// </summary>
+        /// <param name="message">Message received</param>
+        /// <param name="connection">Connection that received the message</param>
+        public void RaiseMessageReceived(string message, TcpConnection connection)
+        {
+            OnMessageReceived?.Invoke(message, connection);
+        }
+        
+        /// <summary>
+        /// Raises the OnClientConnected event
+        /// </summary>
+        /// <param name="connection">Connection that connected</param>
+        public void RaiseClientConnected(TcpConnection connection)
+        {
+            OnClientConnected?.Invoke(connection);
+        }
+        
+        /// <summary>
+        /// Raises the OnClientDisconnected event
+        /// </summary>
+        /// <param name="connection">Connection that disconnected</param>
+        public void RaiseClientDisconnected(TcpConnection connection)
+        {
+            OnClientDisconnected?.Invoke(connection);
+        }
 
         private TcpListener _listener;
         private CancellationTokenSource _cancellationTokenSource;
@@ -138,14 +182,14 @@ namespace YetAnotherUnityMcp.Editor.Net
                 _listenerTask = AcceptConnectionsAsync();
 
                 Debug.Log("[TCP Server] Started successfully");
-                OnStarted?.Invoke();
+                RaiseStarted();
                 
                 return true;
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[TCP Server] Start error: {ex.Message}");
-                OnError?.Invoke($"Start error: {ex.Message}");
+                RaiseError($"Start error: {ex.Message}");
                 _isRunning = false;
                 return false;
             }
@@ -176,12 +220,12 @@ namespace YetAnotherUnityMcp.Editor.Net
                 
                 _isRunning = false;
                 Debug.Log("[TCP Server] Stopped");
-                OnStopped?.Invoke();
+                RaiseStopped();
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[TCP Server] Stop error: {ex.Message}");
-                OnError?.Invoke($"Stop error: {ex.Message}");
+                RaiseError($"Stop error: {ex.Message}");
             }
         }
 
@@ -195,14 +239,14 @@ namespace YetAnotherUnityMcp.Editor.Net
             if (!_isRunning)
             {
                 Debug.LogError("[TCP Server] Cannot send message: Server not running");
-                OnError?.Invoke("Cannot send message: Server not running");
+                RaiseError("Cannot send message: Server not running");
                 return;
             }
 
             if (!_connections.TryGetValue(connectionId, out TcpConnection connection))
             {
                 Debug.LogError($"[TCP Server] Cannot send message: Client {connectionId} not found");
-                OnError?.Invoke($"Cannot send message: Client {connectionId} not found");
+                RaiseError($"Cannot send message: Client {connectionId} not found");
                 return;
             }
 
@@ -233,7 +277,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                     if (_connections.TryRemove(connectionId, out _))
                     {
                         _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {connectionId} disconnected"));
-                        OnClientDisconnected?.Invoke(connection);
+                        RaiseClientDisconnected(connection);
                     }
                 }
             }
@@ -248,7 +292,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             if (!_isRunning)
             {
                 Debug.LogError("[TCP Server] Cannot broadcast message: Server not running");
-                OnError?.Invoke("Cannot broadcast message: Server not running");
+                RaiseError("Cannot broadcast message: Server not running");
                 return;
             }
 
@@ -282,7 +326,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                 if (_connections.TryRemove(clientId, out TcpConnection connection))
                 {
                     _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {clientId} disconnected"));
-                    OnClientDisconnected?.Invoke(connection);
+                    RaiseClientDisconnected(connection);
                 }
             }
             
@@ -317,7 +361,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                 if (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
                     Debug.LogError($"[TCP Server] Accept error: {ex.Message}");
-                    OnError?.Invoke($"Accept error: {ex.Message}");
+                    RaiseError($"Accept error: {ex.Message}");
                 }
             }
         }
@@ -353,7 +397,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                 // Notify of new connection
                 _messageQueue.Enqueue(new TcpStatusMessage(
                     $"Client connected: {connectionId} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}"));
-                OnClientConnected?.Invoke(connection);
+                RaiseClientConnected(connection);
                 
                 // Start receiving messages from this client
                 await ReceiveMessagesAsync(connection);
@@ -361,7 +405,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             catch (Exception ex)
             {
                 Debug.LogError($"[TCP Server] Error handling client connection: {ex.Message}");
-                OnError?.Invoke($"Error handling client connection: {ex.Message}");
+                RaiseError($"Error handling client connection: {ex.Message}");
                 
                 // Ensure the client is properly closed
                 try { client.Close(); } catch { }
@@ -536,7 +580,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                 {
                     // Queue the disconnect message
                     _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {connection.Id} disconnected"));
-                    OnClientDisconnected?.Invoke(connection);
+                    RaiseClientDisconnected(connection);
                 }
                 
                 // Close the connection
@@ -610,7 +654,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             catch (Exception ex)
             {
                 Debug.LogError($"[TCP Server] Error processing message queue: {ex.Message}");
-                OnError?.Invoke($"Error processing message queue: {ex.Message}");
+                RaiseError($"Error processing message queue: {ex.Message}");
             }
         }
     }

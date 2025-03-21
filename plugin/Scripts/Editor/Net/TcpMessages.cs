@@ -89,7 +89,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             // Notify message received event
             if (Connection != null)
             {
-                server.OnMessageReceived?.Invoke(JsonContent, Connection);
+                server.RaiseMessageReceived(JsonContent, Connection);
             }
         }
         
