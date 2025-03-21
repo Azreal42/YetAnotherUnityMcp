@@ -142,6 +142,13 @@ By default, the system defines a set of commands that the Unity server will reco
 - `get_logs`: Get recent Unity console logs.
 - `get_unity_info`: Get information about the Unity environment.
 - `get_schema`: Retrieve information about all available tools and resources.
+- `access_resource`: Generic command to access any registered resource by name.
+
+The `access_resource` command deserves special mention as it provides a dynamic way to access any resource registered in the schema. It takes two parameters:
+- `resource_name`: Name of the resource to access (e.g., "unity_info")
+- `parameters`: Dictionary of parameters to pass to the resource (optional)
+
+This command uses the `ResourceInvoker` behind the scenes to dynamically lookup the resource in the registry, find its handler type, and invoke the appropriate method with parameter mapping and type conversion.
 
 ## TCP Socket Implementation Details
 
@@ -312,15 +319,29 @@ The schema system uses C# attributes for automatic schema generation. This allow
 
 3. **Registration**:
    Tools and resources are registered in the Unity `MCPRegistry` class, which maintains a singleton instance with all available operations. The registration happens automatically using reflection on attributed classes.
+   
+4. **Resource and Tool Invocation**:
+   The system provides dynamic invocation of resources and tools through dedicated invoker classes:
+   - `ResourceInvoker`: Dynamically invokes resources by name from the registry
+   - `ToolInvoker`: Dynamically invokes tools by name from the registry
+   - Both invokers handle parameter mapping, type conversion, and error handling
+   - Registry provides lookup methods to find resources and tools by name
 
-4. **Name Inference**:
+5. **Name Inference**:
    When the `name` parameter of an attribute is set to `null`, the system automatically infers the name by:
    - Converting the class or member name from CamelCase to snake_case
    - Removing suffix words like "Command" or "Resource" 
    - For example: `TakeScreenshotCommand` → `take_screenshot`
 
-5. **Testing**:
-   The schema system is thoroughly tested using NUnit tests in the Unity Test Framework:
+6. **Dynamic Invocation**:
+   The system provides a standardized way to dynamically invoke resources and tools:
+   - `ResourceInvoker.InvokeResource(string resourceName, Dictionary<string, object> parameters)`: Invokes a resource by name
+   - `ToolInvoker.InvokeTool(string toolName, Dictionary<string, object> parameters)`: Invokes a tool by name
+   - Both methods handle parameter mapping, type conversion, and proper error handling
+   - Used by the TCP server to handle `access_resource` and other dynamic commands
+
+7. **Testing**:
+   The schema and invocation systems are thoroughly tested using NUnit tests:
    - `MCPAttributeUtilTests`: Tests for the core schema generation functions
      - `ConvertCamelCaseToSnakeCase_ReturnsCorrectResults`: Tests the name inference algorithm
      - `GetTypeString_ReturnsCorrectTypeStrings`: Tests C# type conversion to schema types
@@ -328,6 +349,9 @@ The schema system uses C# attributes for automatic schema generation. This allow
      - `CreateToolDescriptorFromCommandType_WithInferredName_ReturnsCorrectDescriptor`: Tests name inference
      - Tests for complex output schema generation from different return types
    - `MCPRegistryTests`: Tests for the schema registration system
+   - `MCPInvokersTests`: Tests for the dynamic resource and tool invocation
+     - Tests for parameter mapping, type conversion, and error handling
+     - Tests with different resource and tool types (parameterless, with parameters, with default values)
    - `GetSchemaCommandTests`: Integration tests for the entire schema retrieval pipeline
 
 #### Example: Attribute-Based Command Definition

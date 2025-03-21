@@ -178,6 +178,17 @@ class DynamicToolManager:
                 await current_ctx.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
                 
                 # Execute the command via our utility
+                # Map the resource name to the appropriate command
+                # Unity expects direct command names like "get_unity_info" not "access_resource"
+                # We need to map resource names to command names
+                
+                # Now we use a consistent approach for all resources through the access_resource command
+                # The Unity side will handle mapping resource_name to the appropriate command
+                
+                # Log the resource access
+                await current_ctx.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
+                
+                # Execute using the unified access_resource command
                 result = await execute_unity_operation(
                     f"dynamic resource {resource_name}",
                     lambda client: client.send_command("access_resource", {

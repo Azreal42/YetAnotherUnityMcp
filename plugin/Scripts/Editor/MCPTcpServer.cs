@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEditor;
 using Newtonsoft.Json;
+using System.Reflection;
+using System.Linq;
 using YetAnotherUnityMcp.Editor.Commands;
 using YetAnotherUnityMcp.Editor.Models;
 using YetAnotherUnityMcp.Editor.Net;
@@ -317,6 +319,35 @@ namespace YetAnotherUnityMcp.Editor
                             
                         case "get_schema":
                             result = GetSchemaCommand.Execute();
+                            break;
+                            
+                        case "access_resource":
+                            // Invoke a resource using the ResourceInvoker
+                            if (parameters?.TryGetValue("resource_name", out object resourceNameObj) == true && 
+                                resourceNameObj is string resourceName)
+                            {
+                                // Get the resource parameters
+                                Dictionary<string, object> resourceParams = parameters?.TryGetValue("parameters", out object resourceParamsObj) == true &&
+                                                                           resourceParamsObj is Dictionary<string, object> paramsDict
+                                                                           ? paramsDict
+                                                                           : new Dictionary<string, object>();
+                                
+                                try
+                                {
+                                    // Use the ResourceInvoker to invoke the resource
+                                    result = ResourceInvoker.InvokeResource(resourceName, resourceParams);
+                                    Debug.Log($"[MCP TCP Server] Resource {resourceName} accessed successfully");
+                                }
+                                catch (Exception ex)
+                                {
+                                    error = ex.Message;
+                                    Debug.LogError($"[MCP TCP Server] Error accessing resource {resourceName}: {ex.Message}\n{ex.StackTrace}");
+                                }
+                            }
+                            else
+                            {
+                                error = "Missing or invalid 'resource_name' parameter";
+                            }
                             break;
                             
                         default:

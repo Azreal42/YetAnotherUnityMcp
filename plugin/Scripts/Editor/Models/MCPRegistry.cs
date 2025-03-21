@@ -47,6 +47,56 @@ namespace YetAnotherUnityMcp.Editor.Models
         }
         
         /// <summary>
+        /// Get a resource descriptor by name
+        /// </summary>
+        /// <param name="resourceName">Name of the resource to find</param>
+        /// <returns>Resource descriptor or null if not found</returns>
+        public ResourceDescriptor GetResourceByName(string resourceName)
+        {
+            return _schema.Resources.Find(r => r.Name == resourceName);
+        }
+        
+        /// <summary>
+        /// Get a tool descriptor by name
+        /// </summary>
+        /// <param name="toolName">Name of the tool to find</param>
+        /// <returns>Tool descriptor or null if not found</returns>
+        public ToolDescriptor GetToolByName(string toolName)
+        {
+            return _schema.Tools.Find(t => t.Name == toolName);
+        }
+        
+        /// <summary>
+        /// Get the type with MCPResource attribute matching a resource name
+        /// </summary>
+        /// <param name="resourceName">Name of the resource</param>
+        /// <returns>Type of the resource handler or null if not found</returns>
+        public Type GetResourceHandlerType(string resourceName)
+        {
+            return Assembly.GetExecutingAssembly()
+                .GetTypes()
+                .FirstOrDefault(t => {
+                    var attr = t.GetCustomAttribute<MCPResourceAttribute>();
+                    return attr != null && attr.Name == resourceName;
+                });
+        }
+        
+        /// <summary>
+        /// Get the type with MCPTool attribute matching a tool name
+        /// </summary>
+        /// <param name="toolName">Name of the tool</param>
+        /// <returns>Type of the tool handler or null if not found</returns>
+        public Type GetToolHandlerType(string toolName)
+        {
+            return Assembly.GetExecutingAssembly()
+                .GetTypes()
+                .FirstOrDefault(t => {
+                    var attr = t.GetCustomAttribute<MCPToolAttribute>();
+                    return attr != null && attr.Name == toolName;
+                });
+        }
+        
+        /// <summary>
         /// Register a tool
         /// </summary>
         public void RegisterTool(ToolDescriptor tool)

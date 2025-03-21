@@ -123,6 +123,8 @@ The Unity plugin hosts a TCP server that listens for connections from MCP client
 
 - Manages client connections and message routing with a simple framing protocol
 - Supports handshake and ping/pong for connection health monitoring
+- Uses a dynamic registry of tools and resources with reflection-based attribute discovery
+- Provides invokers for dynamically accessing resources and tools by name
 - Executes commands sent by clients (e.g., running C# code, taking screenshots)
 - Returns results back to clients
 - Provides a UI for monitoring connections and debugging
