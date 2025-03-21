@@ -55,6 +55,15 @@ async def main():
         try:
             schema = await client.get_schema()
             
+            # Check if schema is a string and parse it
+            if isinstance(schema, str):
+                logger.info("Schema returned as string, parsing JSON...")
+                try:
+                    schema = json.loads(schema)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse schema JSON: {e}")
+                    raise
+            
             # Log tools
             logger.info(f"Found {len(schema.get('tools', []))} tools:")
             for i, tool in enumerate(schema.get('tools', []), 1):
@@ -134,6 +143,15 @@ async def get_schema_only():
         logger.info("Retrieving schema information (tools and resources)...")
         try:
             schema = await client.get_schema()
+            
+            # Check if schema is a string and parse it
+            if isinstance(schema, str):
+                logger.info("Schema returned as string, parsing JSON...")
+                try:
+                    schema = json.loads(schema)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse schema JSON: {e}")
+                    raise
             
             # Log tools
             tools = schema.get('tools', [])

@@ -40,6 +40,16 @@ class DynamicToolManager:
             # Get schema from Unity
             schema_result = await self.client.get_schema()
             
+            # Handle string schema (JSON string)
+            if isinstance(schema_result, str):
+                logger.info("Schema returned as string, parsing JSON...")
+                try:
+                    schema_result = json.loads(schema_result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse schema JSON: {e}")
+                    return False
+            
+            # Validate schema format
             if not schema_result or not isinstance(schema_result, dict):
                 logger.error(f"Invalid schema returned: {schema_result}")
                 return False

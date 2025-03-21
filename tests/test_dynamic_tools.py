@@ -4,9 +4,9 @@ import asyncio
 import logging
 import sys
 import json
+from server.dynamic_tool_invoker import invoke_dynamic_tool
+from server.dynamic_tools import DynamicToolManager
 from server.unity_socket_client import get_client
-from server.mcp.dynamic_tools import DynamicToolManager
-from server.mcp.dynamic_tool_invoker import invoke_dynamic_tool
 from mcp.server.fastmcp import FastMCP
 
 # Configure logging
@@ -37,6 +37,20 @@ async def main():
     # Get schema
     logger.info("Getting schema...")
     schema = await client.get_schema()
+    
+    # Check if schema is a string (possibly JSON) and parse it if needed
+    if isinstance(schema, str):
+        logger.info("Schema returned as string, parsing JSON...")
+        try:
+            schema = json.loads(schema)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse schema JSON")
+            return
+    
+    # Save schema to file for debugging
+    with open('schema_debug.json', 'w') as f:
+        json.dump(schema, f, indent=2)
+    logger.info("Schema saved to schema_debug.json for inspection")
     
     # Print tools from schema
     tools = schema.get('tools', [])

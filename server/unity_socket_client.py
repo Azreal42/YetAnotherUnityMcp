@@ -31,7 +31,7 @@ class UnitySocketClient:
     Now delegates to UnityTcpClient for all operations.
     """
     
-    def __init__(self, url: str = "tcp://localhost:8080/"):
+    def __init__(self, url: str = "tcp://127.0.0.1:8080/"):
         """
         Initialize the Unity WebSocket client.
         
@@ -176,12 +176,12 @@ class UnitySocketClient:
 # Singleton instance for easy access
 _instance: Optional[UnitySocketClient] = None
 
-def get_client(url: str = "ws://localhost:8080/") -> UnitySocketClient:
+def get_client(url: str = "tcp://127.0.0.1:8080/") -> UnitySocketClient:
     """
     Get the Unity WebSocket client instance.
     
     Args:
-        url: WebSocket server URL (ws://host:port/)
+        url: WebSocket server URL (tcp://host:port/)
         
     Returns:
         Unity WebSocket client instance
