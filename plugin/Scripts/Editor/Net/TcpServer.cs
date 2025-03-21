@@ -598,9 +598,9 @@ namespace YetAnotherUnityMcp.Editor.Net
                                     {
                                         // Read one byte asynchronously with timeout
                                         byte[] oneByte = new byte[1];
-                                        int bytesRead = await stream.ReadAsync(oneByte, 0, 1, readTimeoutCts.Token);
+                                        int bytesReadForMarker = await stream.ReadAsync(oneByte, 0, 1, readTimeoutCts.Token);
                                         
-                                        if (bytesRead == 0)
+                                        if (bytesReadForMarker == 0)
                                         {
                                             Debug.LogError($"[TCP Server] Client {connection.Id} disconnected while waiting for start marker");
                                             throw new EndOfStreamException("Client disconnected");
@@ -696,9 +696,9 @@ namespace YetAnotherUnityMcp.Editor.Net
                                 using (var endMarkerCts = CancellationTokenSource.CreateLinkedTokenSource(
                                     timeoutCts.Token, _cancellationTokenSource.Token))
                                 {
-                                    int bytesRead = await stream.ReadAsync(endMarkerBytes, 0, 1, endMarkerCts.Token);
+                                    int endMarkerBytesRead = await stream.ReadAsync(endMarkerBytes, 0, 1, endMarkerCts.Token);
                                     
-                                    if (bytesRead == 0)
+                                    if (endMarkerBytesRead == 0)
                                     {
                                         throw new EndOfStreamException("Client disconnected while reading end marker");
                                     }
