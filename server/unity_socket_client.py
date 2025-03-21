@@ -43,6 +43,16 @@ class UnitySocketClient:
         logger.info(f"Creating TCP client with URL: {tcp_url} (from WebSocket URL: {url})")
         self.tcp_client = UnityTcpClient(tcp_url)
         
+    @property
+    def connected(self) -> bool:
+        """
+        Check if the client is connected to the server.
+        
+        Returns:
+            True if connected, False otherwise
+        """
+        return self.tcp_client.connected
+        
     async def connect(self) -> bool:
         """
         Connect to the Unity server.

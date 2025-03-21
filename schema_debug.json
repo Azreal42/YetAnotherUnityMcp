@@ -1,0 +1,173 @@
+{
+  "tools": [
+    {
+      "name": "execute_code",
+      "description": "Execute C# code in Unity",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "C# code to execute in the Unity environment",
+            "required": true
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the execute_code operation",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")"
+    },
+    {
+      "name": "modify_object",
+      "description": "Modify a property of a Unity GameObject",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string",
+            "description": "ID or path of the GameObject",
+            "required": true
+          },
+          "property_path": {
+            "type": "string",
+            "description": "Path to the property to modify",
+            "required": true
+          },
+          "property_value": {
+            "type": "any",
+            "description": "New value for the property",
+            "required": true
+          }
+        },
+        "required": [
+          "object_id",
+          "property_path",
+          "property_value"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the modify_object operation",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "modify_object(object_id=\"Main Camera\", property_path=\"transform.position.x\", property_value=10)"
+    },
+    {
+      "name": "take_screenshot",
+      "description": "Take a screenshot of the Unity Editor",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "output_path": {
+            "type": "string",
+            "description": "Path where to save the screenshot",
+            "required": false
+          },
+          "width": {
+            "type": "number",
+            "description": "Width of the screenshot",
+            "required": false
+          },
+          "height": {
+            "type": "number",
+            "description": "Height of the screenshot",
+            "required": false
+          }
+        },
+        "required": []
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the take_screenshot operation",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)"
+    }
+  ],
+  "resources": [
+    {
+      "name": "unity_logs",
+      "description": "Get logs from the Unity Editor console",
+      "urlPattern": "unity://logs/{max_logs}",
+      "parameters": {
+        "max_logs": {
+          "type": "string",
+          "description": "Parameter max_logs for this resource",
+          "required": true
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the unity_logs resource",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "unity://logs/50"
+    },
+    {
+      "name": "unity_schema",
+      "description": "Get information about available tools and resources",
+      "urlPattern": "unity://schema",
+      "parameters": {},
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the unity_schema resource",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "unity://schema"
+    },
+    {
+      "name": "unity_info",
+      "description": "Get information about the Unity environment",
+      "urlPattern": "unity://info",
+      "parameters": {},
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Result of the unity_info resource",
+            "required": true
+          }
+        },
+        "required": []
+      },
+      "example": "unity://info"
+    }
+  ]
+}

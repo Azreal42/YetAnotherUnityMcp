@@ -3,7 +3,9 @@
 import logging
 import inspect
 import json
-from typing import Any, Dict, List, Optional, Callable, Awaitable
+import re
+from typing import Any, Dict, List, Optional, Callable, Awaitable, Set
+
 from mcp.server.fastmcp import FastMCP, Context
 from server.unity_socket_client import UnitySocketClient, get_client
 from server.unity_client_util import execute_unity_operation
@@ -12,7 +14,7 @@ logger = logging.getLogger("dynamic_tools")
 
 class DynamicToolManager:
     """
-    Manager for dynamically registering tools based on Unity schema.
+    Manager for dynamically registering tools and resources based on Unity schema.
     """
     
     def __init__(self, mcp: FastMCP):
@@ -91,27 +93,20 @@ class DynamicToolManager:
         description = tool_schema.get('description', f"Unity tool: {tool_name}")
         
         # Create the dynamic tool function
-        async def dynamic_tool(*args, **kwargs) -> Any:
-            ctx = kwargs.get('ctx')
-            if not ctx:
-                for arg in args:
-                    if isinstance(arg, Context):
-                        ctx = arg
-                        break
-                        
-            if not ctx:
-                logger.error(f"No context found for {tool_name}")
-                raise ValueError("No context provided")
-                
+        async def dynamic_tool(ctx: Context, *args, **kwargs) -> Any:
+            """Dynamic tool execution function"""
             # Extract parameters based on the input schema
             params = {}
-            sig = inspect.signature(dynamic_tool)
-            param_names = [p for p in sig.parameters if p != 'ctx']
+            
+            # Map positional args to parameters based on input schema
+            input_schema = tool_schema.get('inputSchema', {})
+            properties = input_schema.get('properties', {})
+            param_names = list(properties.keys())
             
             # Map the positional args to named parameters
-            for i, arg_name in enumerate(param_names):
+            for i, param_name in enumerate(param_names):
                 if i < len(args):
-                    params[arg_name] = args[i]
+                    params[param_name] = args[i]
                     
             # Add any keyword args
             for k, v in kwargs.items():
@@ -119,7 +114,7 @@ class DynamicToolManager:
                     params[k] = v
                     
             try:
-                ctx.info(f"Executing dynamic tool {tool_name} with params: {json.dumps(params)}")
+                await ctx.info(f"Executing dynamic tool {tool_name} with params: {json.dumps(params)}")
                 result = await execute_unity_operation(
                     f"dynamic tool {tool_name}",
                     lambda client: client.send_command(tool_name, params),
@@ -128,36 +123,16 @@ class DynamicToolManager:
                 )
                 return result
             except Exception as e:
-                ctx.error(f"Error in dynamic tool {tool_name}: {str(e)}")
-                return {"error": str(e)}
+                await ctx.error(f"Error in dynamic tool {tool_name}: {str(e)}")
+                raise
                 
-        # Customize the function based on input schema
-        input_schema = tool_schema.get('inputSchema', {})
-        properties = input_schema.get('properties', {})
-        required = input_schema.get('required', [])
-        
-        # Create parameter annotations
-        parameters = []
-        for param_name, param_info in properties.items():
-            param_type = param_info.get('type', 'string')
-            param_required = param_name in required
-            parameters.append((param_name, param_info.get('description', ''), param_type, param_required))
-            
         # Register the tool with FastMCP
-        # We need to create a closure to capture the parameters
-        def register_dynamic_tool(mcp: FastMCP, tool_func, tool_name: str, description: str, parameters: List) -> None:
-            # Create decorated function with proper parameters
-            decorated = mcp.tool(name=tool_name, description=description)
-            
-            # Apply the decoration
-            final_func = decorated(tool_func)
-            
-            # Store reference to the registered tool
-            self.registered_tools[tool_name] = description
-            logger.info(f"Registered dynamic tool: {tool_name}")
-            
-        # Register the tool
-        register_dynamic_tool(self.mcp, dynamic_tool, tool_name, description, parameters)
+        decorated = self.mcp.tool(name=tool_name, description=description)
+        final_func = decorated(dynamic_tool)
+        
+        # Store reference to the registered tool
+        self.registered_tools[tool_name] = description
+        logger.info(f"Registered dynamic tool: {tool_name}")
             
     async def _register_resource(self, resource_schema: Dict[str, Any]) -> None:
         """
@@ -183,80 +158,85 @@ class DynamicToolManager:
             
         description = resource_schema.get('description', f"Unity resource: {resource_name}")
         
-        # Extract parameters from URL pattern
-        param_names = []
-        parts = url_pattern.split('/')
-        for part in parts:
-            if part.startswith('{') and part.endswith('}'):
-                param_name = part[1:-1]
-                param_names.append(param_name)
+        # Extract parameters from URL pattern using regex
+        param_pattern = r"\{([^}]+)\}"
+        uri_params = re.findall(param_pattern, url_pattern)
+        
+        # Create a wrapper to handle execution, since we can't directly use the context
+        # in resource handlers (due to FastMCP's validation)
+        async def execute_resource_handler(resource_name: str, parameters: Dict[str, Any] = None):
+            """Generic resource handler that will be wrapped"""
+            if parameters is None:
+                parameters = {}
                 
-        # Create the dynamic resource function
-        async def dynamic_resource(*args, **kwargs) -> Any:
-            ctx = kwargs.get('ctx')
-            if not ctx:
-                for arg in args:
-                    if isinstance(arg, Context):
-                        ctx = arg
-                        break
-                        
-            if not ctx:
-                logger.error(f"No context found for {resource_name}")
-                raise ValueError("No context provided")
-                
-            # Construct URL with parameters
-            url = url_pattern
-            params = {}
+            # Get access to the current FastMCP context at execution time
+            # Important: This only works during request processing
+            current_ctx = self.mcp.get_context()
             
-            # Map positional args to URL parameters
-            for i, param_name in enumerate(param_names):
-                if i < len(args):
-                    value = args[i]
-                    url = url.replace(f"{{{param_name}}}", str(value))
-                    params[param_name] = value
-                    
-            # Add any keyword args
-            for k, v in kwargs.items():
-                if k != 'ctx' and k in param_names:
-                    url = url.replace(f"{{{k}}}", str(v))
-                    params[k] = v
-                    
             try:
-                ctx.info(f"Accessing dynamic resource {resource_name} with URL: {url}")
+                # Log access
+                await current_ctx.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
                 
-                # For now, we'll use a generic command to access the resource
-                # In the future, this could be implemented as a proper REST resource
+                # Execute the command via our utility
                 result = await execute_unity_operation(
                     f"dynamic resource {resource_name}",
-                    lambda client: client.send_command(f"access_resource", {
+                    lambda client: client.send_command("access_resource", {
                         "resource_name": resource_name,
-                        "parameters": params
+                        "parameters": parameters
                     }),
-                    ctx,
+                    current_ctx,
                     f"Error accessing resource {resource_name}"
                 )
                 return result
             except Exception as e:
-                ctx.error(f"Error in dynamic resource {resource_name}: {str(e)}")
-                return {"error": str(e)}
+                await current_ctx.error(f"Error in resource {resource_name}: {str(e)}")
+                raise
+        
+        # Register the resource based on parameter count
+        if not uri_params:
+            # No parameters resource (e.g., unity://info)
+            @self.mcp.resource(url_pattern, description=description)
+            async def no_params_handler():
+                return await execute_resource_handler(resource_name)
                 
-        # Register the resource with FastMCP
-        # We need to create a closure to capture the parameters
-        def register_dynamic_resource(mcp: FastMCP, resource_func, resource_name: str, 
-                                    url_pattern: str, description: str) -> None:
-            # Register with mcp.resource
-            decorated = mcp.resource(url_pattern, description=description)
-            
-            # Apply the decoration
-            final_func = decorated(resource_func)
-            
-            # Store reference to the registered resource
             self.registered_resources[resource_name] = url_pattern
-            logger.info(f"Registered dynamic resource: {resource_name} with URL pattern: {url_pattern}")
+            logger.info(f"Registered parameterless resource: {resource_name} with URL: {url_pattern}")
             
-        # Register the resource
-        register_dynamic_resource(self.mcp, dynamic_resource, resource_name, url_pattern, description)
+        elif len(uri_params) == 1:
+            # Single parameter resource (e.g., unity://logs/{max_logs})
+            param_name = uri_params[0]
             
+            # Create a function dynamically with the correct parameter name
+            exec_globals = {'execute_resource_handler': execute_resource_handler, 'resource_name': resource_name}
+            
+            exec(f"""
+async def single_param_handler({param_name}):
+    return await execute_resource_handler(resource_name, {{{param_name!r}: {param_name}}})
+""", exec_globals)
+            
+            # Register the handler with FastMCP
+            self.mcp.resource(url_pattern, description=description)(exec_globals['single_param_handler'])
+            self.registered_resources[resource_name] = url_pattern
+            logger.info(f"Registered single-parameter resource: {resource_name} with URL: {url_pattern}")
+            
+        else:
+            # Multi-parameter resource (e.g., unity://object/{id}/property/{property_name})
+            param_list = ", ".join(uri_params)
+            param_dict = ", ".join([f"{p!r}: {p}" for p in uri_params])
+            
+            # Create a function dynamically with exactly the right parameter names
+            exec_globals = {'execute_resource_handler': execute_resource_handler, 'resource_name': resource_name}
+            
+            exec(f"""
+async def multi_param_handler({param_list}):
+    return await execute_resource_handler(resource_name, {{{param_dict}}})
+""", exec_globals)
+            
+            # Register the handler with FastMCP
+            self.mcp.resource(url_pattern, description=description)(exec_globals['multi_param_handler'])
+            self.registered_resources[resource_name] = url_pattern
+            logger.info(f"Registered multi-parameter resource: {resource_name} with URL: {url_pattern}")
+                
 # Singleton instance for easy access
 _instance: Optional[DynamicToolManager] = None
 
