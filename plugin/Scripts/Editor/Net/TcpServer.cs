@@ -97,12 +97,12 @@ namespace YetAnotherUnityMcp.Editor.Net
         private DateTime _lastPerformanceLog = DateTime.Now;
 
         // Message delimiters and constants
-        private const byte START_MARKER = 0x02; // STX (Start of Text)
-        private const byte END_MARKER = 0x03;   // ETX (End of Text)
-        private const string PING_MESSAGE = "PING";
-        private const string PONG_RESPONSE = "PONG";
-        private const string HANDSHAKE_REQUEST = "YAUM_HANDSHAKE_REQUEST";
-        private const string HANDSHAKE_RESPONSE = "YAUM_HANDSHAKE_RESPONSE";
+        public const byte START_MARKER = 0x02; // STX (Start of Text)
+        public const byte END_MARKER = 0x03;   // ETX (End of Text)
+        public const string PING_MESSAGE = "PING";
+        public const string PONG_RESPONSE = "PONG";
+        public const string HANDSHAKE_REQUEST = "YAUM_HANDSHAKE_REQUEST";
+        public const string HANDSHAKE_RESPONSE = "YAUM_HANDSHAKE_RESPONSE";
 
         /// <summary>
         /// Constructor - register for update
