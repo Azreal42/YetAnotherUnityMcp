@@ -426,49 +426,78 @@ namespace YetAnotherUnityMcp.Editor.Net
                 Debug.Log("[TCP Server] Waiting for handshake request from client...");
                 
                 // Read initial handshake request with timeout
-                var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var readTask = stream.ReadAsync(buffer, 0, buffer.Length, cancellationTokenSource.Token);
+                var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // Extended timeout
                 
-                // Wait for the read to complete or timeout
-                if (await Task.WhenAny(readTask, Task.Delay(5000)) != readTask)
+                // Use a more reliable approach - read until we detect the full handshake
+                int totalBytesRead = 0;
+                bool handshakeFound = false;
+                
+                try
+                {
+                    while (totalBytesRead < buffer.Length)
+                    {
+                        int bytesRead = await stream.ReadAsync(buffer, totalBytesRead, buffer.Length - totalBytesRead, cancellationTokenSource.Token);
+                        
+                        if (bytesRead == 0)
+                        {
+                            // Connection closed
+                            Debug.LogError("[TCP Server] Connection closed during handshake");
+                            return false;
+                        }
+                        
+                        totalBytesRead += bytesRead;
+                        
+                        // Convert current buffer to string and check for handshake
+                        string currentMessage = Encoding.UTF8.GetString(buffer, 0, totalBytesRead);
+                        
+                        // Log progress
+                        Debug.Log($"[TCP Server] Read {bytesRead} bytes, total: {totalBytesRead}, current content: '{currentMessage}'");
+                        
+                        // Check if the buffer contains the handshake request (with any whitespace/formatting differences)
+                        if (currentMessage.Contains(HANDSHAKE_REQUEST))
+                        {
+                            handshakeFound = true;
+                            break;
+                        }
+                        
+                        // Short delay to avoid busy waiting
+                        await Task.Delay(10);
+                    }
+                }
+                catch (OperationCanceledException)
                 {
                     Debug.LogError("[TCP Server] Handshake timeout");
                     return false;
                 }
                 
-                int bytesRead = await readTask;
-                string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                
-                // Log received message details for debugging
-                Debug.Log($"[TCP Server] Received handshake request: '{message}' (length: {bytesRead})");
-                
-                // Log hex representation for binary analysis
-                string hexBytes = BitConverter.ToString(buffer, 0, bytesRead);
-                Debug.Log($"[TCP Server] Handshake bytes: {hexBytes}");
-                
-                // Trim the message to handle any whitespace or newlines
-                string trimmedMessage = message.Trim();
-                Debug.Log($"[TCP Server] Trimmed handshake request: '{trimmedMessage}'");
-                
-                if (trimmedMessage == HANDSHAKE_REQUEST)
+                if (!handshakeFound)
                 {
-                    // Send handshake response (as plain text, not framed)
-                    byte[] response = Encoding.UTF8.GetBytes(HANDSHAKE_RESPONSE);
-                    Debug.Log($"[TCP Server] Sending handshake response: '{HANDSHAKE_RESPONSE}' (length: {response.Length})");
-                    string hexResponse = BitConverter.ToString(response);
-                    Debug.Log($"[TCP Server] Response bytes: {hexResponse}");
-                    
-                    await stream.WriteAsync(response, 0, response.Length);
-                    await stream.FlushAsync(); // Ensure the response is sent immediately
-                    
-                    Debug.Log("[TCP Server] Handshake successful");
-                    return true;
-                }
-                else
-                {
-                    Debug.LogError($"[TCP Server] Invalid handshake request: {message}");
+                    Debug.LogError("[TCP Server] Handshake request not found in received data");
                     return false;
                 }
+                
+                // Log the received handshake request
+                string message = Encoding.UTF8.GetString(buffer, 0, totalBytesRead);
+                Debug.Log($"[TCP Server] Received handshake request: '{message}' (length: {totalBytesRead})");
+                
+                // Log hex representation for binary analysis
+                string hexBytes = BitConverter.ToString(buffer, 0, totalBytesRead);
+                Debug.Log($"[TCP Server] Handshake bytes: {hexBytes}");
+                
+                // Send handshake response (as plain text, not framed)
+                byte[] response = Encoding.UTF8.GetBytes(HANDSHAKE_RESPONSE);
+                Debug.Log($"[TCP Server] Sending handshake response: '{HANDSHAKE_RESPONSE}' (length: {response.Length})");
+                string hexResponse = BitConverter.ToString(response);
+                Debug.Log($"[TCP Server] Response bytes: {hexResponse}");
+                
+                await stream.WriteAsync(response, 0, response.Length);
+                await stream.FlushAsync(); // Ensure the response is sent immediately
+                
+                // Add a small delay to ensure the client receives the response
+                await Task.Delay(100);
+                
+                Debug.Log("[TCP Server] Handshake successful");
+                return true;
             }
             catch (Exception ex)
             {
