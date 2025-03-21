@@ -34,7 +34,7 @@ async def execute_unity_operation(
     
     # Execute with automatic reconnection
     async def execute_operation():
-        ctx.info(f"Executing {operation_name}...")
+        await ctx.info(f"Executing {operation_name}...")
         return await operation(client)
     
     try:
@@ -42,6 +42,6 @@ async def execute_unity_operation(
         return await connection_manager.execute_with_reconnect(execute_operation)
     except Exception as e:
         error_msg = f"{error_prefix}: {str(e)}"
-        ctx.error(error_msg)
+        await ctx.error(error_msg)
         logger.error(error_msg)
         raise Exception(error_msg)
