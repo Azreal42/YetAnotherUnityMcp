@@ -269,7 +269,7 @@ namespace YetAnotherUnityMcp.Editor
                 {
                     // Track the start time for our own logging
                     long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    Debug.Log($"[MCP Server] Executing command: {command} at {startTime}ms");
+                    Debug.Log($"[MCP Server] Executing command: {command}");
                     
                     // Process different commands
                     switch (command)

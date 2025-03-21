@@ -93,14 +93,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         private void RegisterBuiltInTools()
         {
-            // Find and register all command classes with MCPTool attributes
             RegisterCommandsFromAssembly(Assembly.GetExecutingAssembly());
-            
-            // Also explicitly register command classes for tools
-            // Only register commands that are marked as tools, not resources
-            RegisterToolFromType(typeof(ExecuteCodeCommand));
-            RegisterToolFromType(typeof(TakeScreenshotCommand));
-            RegisterToolFromType(typeof(ModifyObjectCommand));
         }
         
         /// <summary>
@@ -171,21 +164,13 @@ namespace YetAnotherUnityMcp.Editor.Models
                 RegisterTool(descriptor);
             }
         }
-        
+
         /// <summary>
         /// Register built-in resources
         /// </summary>
-        private void RegisterBuiltInResources()
-        {
-            // Find and register all resource handler classes with MCPResource attributes
-            RegisterResourceHandlersFromAssembly(Assembly.GetExecutingAssembly());
-            
-            // Also explicitly register command classes that are marked as resources
-            RegisterResourceHandlerFromType(typeof(GetLogsCommand));
-            RegisterResourceHandlerFromType(typeof(GetUnityInfoCommand));
-            RegisterResourceHandlerFromType(typeof(GetSchemaCommand));
-        }
-        
+        private void RegisterBuiltInResources() 
+            => RegisterResourceHandlersFromAssembly(Assembly.GetExecutingAssembly());
+
         /// <summary>
         /// Register all resource handler classes with MCPResource attributes from an assembly
         /// </summary>

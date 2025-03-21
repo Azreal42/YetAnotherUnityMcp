@@ -5,7 +5,7 @@ import inspect
 import json
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 from mcp.server.fastmcp import FastMCP, Context
-from server.unity_websocket_client import UnityWebSocketClient, get_client
+from server.unity_socket_client import UnitySocketClient, get_client
 from server.unity_client_util import execute_unity_operation
 
 logger = logging.getLogger("dynamic_tools")

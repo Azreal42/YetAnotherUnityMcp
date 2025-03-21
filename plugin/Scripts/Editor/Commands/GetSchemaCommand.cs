@@ -7,7 +7,6 @@ namespace YetAnotherUnityMcp.Editor.Commands
     /// <summary>
     /// Command to retrieve information about available tools and resources
     /// </summary>
-    [MCPTool("get_schema", "Get information about available tools and resources", "get_schema()")]
     [MCPResource("unity_schema", "Get information about available tools and resources", "unity://schema", "unity://schema")]
     public static class GetSchemaCommand
     {

@@ -11,7 +11,6 @@ namespace YetAnotherUnityMcp.Editor.Commands
     /// <summary>
     /// Command to get logs from the Unity Editor console
     /// </summary>
-    [MCPTool("get_logs", "Get logs from the Unity Editor console", "get_logs(max_logs=50)")]
     [MCPResource("unity_logs", "Get logs from the Unity Editor console", "unity://logs/{max_logs}", "unity://logs/50")]
     public static class GetLogsCommand
     {

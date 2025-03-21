@@ -6,14 +6,14 @@ import asyncio
 import json
 import logging
 from typing import Dict, Any, Optional, List, Union, Callable
-from server.websocket_client import WebSocketClient
+from server.websocket_client import LowLevelTcpClient
 
 logger = logging.getLogger("unity_client")
 
 class UnityTcpClient:
     """
-    Client for communicating with Unity via TCP.
-    Implements the MCP protocol.
+    High-level client for communicating with Unity via TCP.
+    Implements the MCP protocol with specific Unity command methods.
     """
     
     def __init__(self, url: str = "tcp://localhost:8080/"):
@@ -23,7 +23,7 @@ class UnityTcpClient:
         Args:
             url: TCP server URL (tcp://host:port/)
         """
-        self.tcp_client = WebSocketClient(url)  # Using WebSocketClient which is now TCP-based
+        self.tcp_client = LowLevelTcpClient(url)  # Using the low-level TCP client
         self.connected = False
         self.callbacks: Dict[str, List[Callable]] = {
             "connected": [],

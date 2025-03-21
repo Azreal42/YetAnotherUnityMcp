@@ -2,11 +2,34 @@ import asyncio
 import logging
 import json
 import time
+import sys
 
 from server.websocket_client import UnityTcpClient
 
-logging.basicConfig(level=logging.DEBUG)
+# Configure more detailed logging for debugging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger("tcp_test")
+
+# Set TCP client logging to DEBUG
+mcp_logger = logging.getLogger("mcp_client")
+mcp_logger.setLevel(logging.DEBUG)
+
+# If debug flag is passed, print all messages to stdout as hex
+if len(sys.argv) > 1 and sys.argv[1] == "--trace":
+    # Add a custom handler to log raw bytes
+    def trace_data(data, prefix=""):
+        if isinstance(data, bytes):
+            hex_data = ' '.join([f'{byte:02x}' for byte in data])
+            ascii_data = ''.join([chr(byte) if 32 <= byte < 127 else '.' for byte in data])
+            logger.debug(f"{prefix} Hex: {hex_data}")
+            logger.debug(f"{prefix} ASCII: {ascii_data}")
+        elif isinstance(data, str):
+            trace_data(data.encode('utf-8'), prefix)
+            
+    logger.debug("Trace mode enabled - will log raw message bytes")
 
 async def main():
     """
@@ -14,7 +37,7 @@ async def main():
     """
     try:
         # Create a client with the TCP URL
-        client = UnityTcpClient("tcp://localhost:8080/")
+        client = UnityTcpClient("tcp://127.0.0.1:8080/")
         logger.info("Created TCP client instance")
         
         # Step 1: Connect to the server (includes handshake)

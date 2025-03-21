@@ -10,7 +10,7 @@ from fastapi import WebSocket
 from fastmcp import Context
 
 from server.mcp.tools.get_schema import get_unity_schema
-from server.unity_websocket_client import UnityWebSocketClient
+from server.unity_websocket_client import UnitySocketClient
 from server.websocket_handler import websocket_endpoint
 from server.connection_manager import ConnectionManager
 
@@ -18,7 +18,7 @@ from server.connection_manager import ConnectionManager
 @pytest.fixture
 def mock_unity_client():
     """Mock the UnityWebSocketClient"""
-    client = mock.MagicMock(spec=UnityWebSocketClient)
+    client = mock.MagicMock(spec=UnitySocketClient)
     client.connected = True
     client.get_schema = mock.AsyncMock()
     
@@ -174,7 +174,7 @@ async def test_ws_get_schema_command(mock_manager, pending_requests):
 async def test_unity_client_get_schema():
     """Test the get_schema method in UnityWebSocketClient"""
     # Create an instance of UnityWebSocketClient
-    client = UnityWebSocketClient("ws://localhost:8080/")
+    client = UnitySocketClient("ws://localhost:8080/")
     
     # Mock the send_command method
     client.ws_client.send_command = mock.AsyncMock()
@@ -203,7 +203,7 @@ async def test_connection_error_handling():
     ctx = mock.MagicMock(spec=Context)
     
     # Create a mock client that is not connected
-    client = mock.MagicMock(spec=UnityWebSocketClient)
+    client = mock.MagicMock(spec=UnitySocketClient)
     client.connected = False
     
     # Mock connect to fail

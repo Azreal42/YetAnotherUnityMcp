@@ -783,15 +783,44 @@ namespace YetAnotherUnityMcp.Editor.Net
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
             byte[] lengthBytes = BitConverter.GetBytes(messageBytes.Length);
             
+            // Create a single buffer for the complete frame to ensure atomic write
+            int totalLength = 1 + 4 + messageBytes.Length + 1; // STX + LENGTH + MESSAGE + ETX
+            byte[] frameBuffer = new byte[totalLength];
+            int offset = 0;
+            
+            // STX marker
+            frameBuffer[offset++] = TcpServer.START_MARKER;
+            
+            // Message length (4 bytes)
+            Buffer.BlockCopy(lengthBytes, 0, frameBuffer, offset, 4);
+            offset += 4;
+            
+            // Message content
+            Buffer.BlockCopy(messageBytes, 0, frameBuffer, offset, messageBytes.Length);
+            offset += messageBytes.Length;
+            
+            // ETX marker
+            frameBuffer[offset] = TcpServer.END_MARKER;
+            
+            // Log the frame details for debugging
+            Debug.Log($"[TCP Server] Sending framed message: STX + {messageBytes.Length} bytes + ETX (total frame size: {totalLength} bytes)");
+            if (message.Length > 500)
+            {
+                Debug.Log($"[TCP Server] Message content (truncated): {message.Substring(0, 100)}... (total: {message.Length} bytes)");
+            }
+            else
+            {
+                Debug.Log($"[TCP Server] Message content: {message} (total: {message.Length} bytes)");
+            }
+            
+            Debug.Log($"[TCP Server] Frame includes STX (0x{TcpServer.START_MARKER:X2}) at start and ETX (0x{TcpServer.END_MARKER:X2}) at end");
+            
+            // Write the entire frame as a single atomic operation
             NetworkStream stream = Client.GetStream();
-            
-            // Frame format: STX + [LENGTH:4] + [MESSAGE] + ETX
-            await stream.WriteAsync(new byte[] { TcpServer.START_MARKER }, 0, 1); // STX
-            await stream.WriteAsync(lengthBytes, 0, 4); // Message length
-            await stream.WriteAsync(messageBytes, 0, messageBytes.Length); // Message content
-            await stream.WriteAsync(new byte[] { TcpServer.END_MARKER }, 0, 1); // ETX
-            
+            await stream.WriteAsync(frameBuffer, 0, totalLength);
             await stream.FlushAsync(); // Ensure all data is sent
+            
+            Debug.Log("[TCP Server] Message frame sent completely in a single operation");
         }
         
         /// <summary>

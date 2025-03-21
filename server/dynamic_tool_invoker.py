@@ -3,7 +3,7 @@
 import logging
 import json
 from typing import Any, Dict, Optional
-from server.unity_websocket_client import get_client
+from server.unity_socket_client import get_client
 from server.connection_manager import get_unity_connection_manager
 
 logger = logging.getLogger("dynamic_invoker")

@@ -8,7 +8,7 @@ import logging
 import time
 from typing import List, Optional, Callable, Dict, Any
 from fastapi import WebSocket
-from server.unity_websocket_client import get_client
+from server.unity_socket_client import get_client
 
 logger = logging.getLogger("mcp_server")
 

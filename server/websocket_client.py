@@ -228,9 +228,18 @@ class UnityTcpClient:
         frame.extend(message_bytes)
         frame.append(END_MARKER)
         
-        # Send the frame
+        # Log frame details for debugging
+        logger.debug(f"Sending frame: STX + {len(message_bytes)} bytes + ETX (total: {len(frame)} bytes)")
+        if len(message) > 200:
+            logger.debug(f"Message content (truncated): {message[:100]}... (total: {len(message)} bytes)")
+        else:
+            logger.debug(f"Message content: {message}")
+        
+        # Send the frame in a single operation
         self.writer.write(frame)
         await self.writer.drain()
+        
+        logger.debug("Frame sent successfully")
     
     async def _receive_frame(self) -> Optional[str]:
         """
@@ -298,12 +307,53 @@ class UnityTcpClient:
                 logger.debug(f"Reading message data ({message_length} bytes)...")
                 message_bytes = await self.reader.readexactly(message_length)
                 
-                # Read end marker (ETX)
+                # Prepare to read end marker (ETX)
                 logger.debug("Reading end marker (ETX)...")
-                end_marker = await self.reader.readexactly(1)
-                if end_marker[0] != END_MARKER:
-                    logger.error(f"Missing end marker, got: {end_marker[0]:02x}")
+                
+                # Log the last few bytes of the message for debugging
+                last_bytes = message_bytes[-min(10, len(message_bytes)):]
+                logger.debug(f"Last {len(last_bytes)} bytes of message: {' '.join(f'{b:02x}' for b in last_bytes)} (ASCII: {''.join(chr(b) if 32 <= b < 127 else '.' for b in last_bytes)})")
+                
+                # Try to read the end marker with more debug info
+                try:
+                    end_marker = await self.reader.readexactly(1)
+                    logger.debug(f"End marker byte: 0x{end_marker[0]:02x} (expected: 0x{END_MARKER:02x})")
+                    
+                    if end_marker[0] != END_MARKER:
+                        # Special case: if the byte we got is '}' (0x7D), this might be the end of a JSON message
+                        # Let's try to be resilient and accept it anyway
+                        if end_marker[0] == 0x7D:  # ASCII '}'
+                            logger.warning("Got '}' (0x7D) instead of ETX marker - potential JSON end, trying to recover")
+                            # Try to decode and validate the message
+                            try:
+                                message_text = message_bytes.decode('utf-8')
+                                if message_text.strip().endswith('}'):
+                                    # Seems like valid JSON, let's try to parse it
+                                    try:
+                                        json.loads(message_text)
+                                        logger.warning("Message is valid JSON despite incorrect end marker - accepting anyway")
+                                        return message_text
+                                    except json.JSONDecodeError:
+                                        logger.warning("Message ends with '}' but is not valid JSON, rejecting")
+                            except:
+                                logger.warning("Failed to decode message as UTF-8, rejecting")
+                        
+                        # Try to read a few more bytes to see what follows
+                        try:
+                            extra_bytes = await asyncio.wait_for(self.reader.read(10), timeout=0.5)
+                            if extra_bytes:
+                                logger.error(f"Missing end marker, got: 0x{end_marker[0]:02x} followed by: {' '.join(f'{b:02x}' for b in extra_bytes)}")
+                            else:
+                                logger.error(f"Missing end marker, got: 0x{end_marker[0]:02x} (no additional bytes available)")
+                        except:
+                            logger.error(f"Missing end marker, got: 0x{end_marker[0]:02x}")
+                        return None
+                except Exception as e:
+                    logger.error(f"Error reading end marker: {str(e)}")
                     return None
+                
+                # We already handled the error case above
+                # If we get here, the end marker was correct
                 
                 # Convert to string
                 message = message_bytes.decode('utf-8')

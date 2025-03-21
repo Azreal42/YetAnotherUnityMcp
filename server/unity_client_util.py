@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Callable, TypeVar, Awaitable, Optional, cast
 from mcp.server.fastmcp import Context
-from server.unity_websocket_client import get_client, UnityWebSocketClient
+from server.unity_socket_client import get_client, UnitySocketClient
 from server.connection_manager import get_unity_connection_manager
 
 logger = logging.getLogger("unity_client")
@@ -12,7 +12,7 @@ T = TypeVar('T')  # Return type
 
 async def execute_unity_operation(
     operation_name: str,
-    operation: Callable[[UnityWebSocketClient], Awaitable[T]],
+    operation: Callable[[UnitySocketClient], Awaitable[T]],
     ctx: Context,
     error_prefix: str = "Error"
 ) -> T:

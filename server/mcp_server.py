@@ -13,14 +13,14 @@ from mcp.server.fastmcp import FastMCP
 
 # Import components
 from server.dynamic_tools import DynamicToolManager
-from server.unity_websocket_client import UnityWebSocketClient, get_client
+from server.unity_socket_client import UnitySocketClient, get_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp_server")
 
 # Unity WebSocket client instance
-unity_client: UnityWebSocketClient = get_client()
+unity_client: UnitySocketClient = get_client()
 
 @asynccontextmanager
 async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
