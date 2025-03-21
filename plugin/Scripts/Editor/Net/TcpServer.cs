@@ -423,6 +423,8 @@ namespace YetAnotherUnityMcp.Editor.Net
                 var stream = connection.Client.GetStream();
                 byte[] buffer = new byte[1024];
                 
+                Debug.Log("[TCP Server] Waiting for handshake request from client...");
+                
                 // Read initial handshake request with timeout
                 var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var readTask = stream.ReadAsync(buffer, 0, buffer.Length, cancellationTokenSource.Token);
@@ -437,11 +439,19 @@ namespace YetAnotherUnityMcp.Editor.Net
                 int bytesRead = await readTask;
                 string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                 
-                if (message.Trim() == HANDSHAKE_REQUEST)
+                // Log received message details for debugging
+                Debug.Log($"[TCP Server] Received handshake request: '{message}' (length: {bytesRead})");
+                
+                // Trim the message to handle any whitespace or newlines
+                string trimmedMessage = message.Trim();
+                Debug.Log($"[TCP Server] Trimmed handshake request: '{trimmedMessage}'");
+                
+                if (trimmedMessage == HANDSHAKE_REQUEST)
                 {
-                    // Send handshake response
+                    // Send handshake response (as plain text, not framed)
                     byte[] response = Encoding.UTF8.GetBytes(HANDSHAKE_RESPONSE);
                     await stream.WriteAsync(response, 0, response.Length);
+                    await stream.FlushAsync(); // Ensure the response is sent immediately
                     
                     Debug.Log("[TCP Server] Handshake successful");
                     return true;

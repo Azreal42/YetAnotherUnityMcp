@@ -172,12 +172,15 @@ class WebSocketClient:
         """
         try:
             # Send handshake request
+            logger.info(f"Sending handshake request: {HANDSHAKE_REQUEST}")
             self.writer.write(HANDSHAKE_REQUEST.encode('utf-8'))
             await self.writer.drain()
             
             # Read handshake response with timeout
+            logger.info("Waiting for handshake response...")
             response_bytes = await asyncio.wait_for(self.reader.read(1024), timeout=5.0)
             response = response_bytes.decode('utf-8')
+            logger.info(f"Received handshake response: {response}")
             
             if response == HANDSHAKE_RESPONSE:
                 logger.info("Handshake successful")
