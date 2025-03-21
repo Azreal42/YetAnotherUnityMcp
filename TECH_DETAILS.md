@@ -9,9 +9,8 @@ The architecture is organized into two main processes (Unity and Python), each i
 The Unity side is implemented as a typical Unity plugin with separate editor code. All functionality resides in the **Editor** scripts, which are only used in the Unity Editor. The core components on the Unity side are:
 
 1. **TcpServer**: Manages TCP socket connections, provides events for connection management, and message routing.
-2. **MCPTcpServer**: High-level manager for the TCP server with MCP-specific functionality.
-3. **MCPWebSocketServer**: Legacy interface that delegates to MCPTcpServer for backward compatibility.
-4. **MCPWindow**: Editor window for managing and monitoring the server.
+2. **MCPTcpServer**: Primary high-level manager for the TCP server with MCP-specific functionality.
+3. **MCPWindow**: Editor window for managing and monitoring the server.
 5. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
 6. **TcpMessages**: Message types for handling communication (requests, responses, errors).
 7. **MCPRegistry**: Registry for tools and resources with schema information.
@@ -23,15 +22,11 @@ The Python client uses the FastMCP framework to define the available actions and
 
 1. **mcp_server.py**: The main MCP server implementation using FastMCP with lifespan management.
 2. **unity_tcp_client.py**: The high-level client for communicating with Unity using TCP.
-3. **unity_websocket_client.py**: Legacy client that delegates to unity_tcp_client for backward compatibility.
-4. **websocket_client.py**: The low-level TCP client implementation (named for backward compatibility).
-5. **unity_client_util.py**: Utility functions for standardized client operations.
-6. **mcp/tools/**: Tool implementations for MCP with unified execution pattern.
-   - **mcp/tools/get_schema.py**: Tool for retrieving available tools and resources information
-   - **mcp/tools/execute_code.py**: Tool for executing C# code in Unity
-   - **mcp/tools/take_screenshot.py**: Tool for capturing Unity screenshots
-   - And others...
-7. **mcp/resources/**: Resource implementations for MCP with standardized error handling.
+3. **websocket_client.py**: The low-level TCP client implementation (named for backward compatibility).
+4. **unity_client_util.py**: Utility functions for standardized client operations.
+5. **dynamic_tool_invoker.py**: System for dynamically creating and invoking tools based on schema.
+6. **dynamic_tools.py**: Tool and resource manager for FastMCP integration.
+7. **connection_manager.py**: Connection lifecycle management utilities.
 
 The client can run in two modes:
 - **MCP mode**: Using FastMCP's built-in server with STDIO transport (via `fastmcp run` or an MCP-enabled FastAPI app).
@@ -182,7 +177,7 @@ The Unity TCP server has the following components:
 
 The Python client implementation includes:
 
-1. **WebSocketClient** (class name kept for backward compatibility): Low-level client that handles:
+1. **UnityTcpClient** (with WebSocketClient as alias): Low-level client that handles:
    - Connection to Unity server using asyncio TCP sockets with retry mechanism
    - Message framing, sending, and receiving with binary protocol
    - Request-response tracking with unique IDs
@@ -190,14 +185,12 @@ The Python client implementation includes:
    - Async/await interface for Python
    - Automatic reconnection and keep-alive pings
 
-2. **UnityTcpClient**: High-level client that provides:
+2. **unity_tcp_client.py**: High-level client that provides:
    - Higher-level APIs for Unity commands (execute_code, take_screenshot, etc.)
    - Callback registration for status events
    - Error handling and logging
 
-3. **UnityWebSocketClient**: Legacy interface that delegates to UnityTcpClient for backward compatibility.
-
-4. **unity_client_util**: Utility module that provides:
+3. **unity_client_util**: Utility module that provides:
    - Standardized execution pattern for all operations
    - Automatic reconnection attempts
    - Consistent error handling and formatting

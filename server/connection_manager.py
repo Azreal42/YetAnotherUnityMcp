@@ -1,7 +1,23 @@
 """
-Connection manager for WebSocket connections.
-Manages both server-side connections and client-side reconnection.
+DEPRECATED: Connection manager for WebSocket/TCP connections.
+
+This module contains two connection managers:
+1. ConnectionManager - A server-side FastAPI WebSocket connection manager (deprecated)
+2. UnityConnectionManager - A client-side connection manager for Unity TCP connections
+
+The server-side ConnectionManager class is no longer used and will be removed in a future version.
+Only the UnityConnectionManager is actively maintained.
 """
+
+import warnings
+
+# Show deprecation warning for ConnectionManager
+warnings.warn(
+    "ConnectionManager class is deprecated and will be removed in a future version. "
+    "Only UnityConnectionManager should be used.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import asyncio
 import logging
@@ -12,12 +28,25 @@ from server.unity_socket_client import get_client
 
 logger = logging.getLogger("mcp_server")
 
-# Server-side connection manager for FastAPI WebSockets
+# Server-side connection manager for FastAPI WebSockets (DEPRECATED)
 class ConnectionManager:
+    """
+    DEPRECATED: Server-side connection manager for FastAPI WebSockets.
+    
+    This class is no longer used in the current architecture and will be removed in a future version.
+    It's maintained here for backward compatibility only.
+    """
+    
     def __init__(self) -> None:
+        warnings.warn(
+            "ConnectionManager is deprecated and unused in the current architecture.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.active_connections: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket) -> None:
+        """DEPRECATED: Accept a WebSocket connection."""
         try:
             await websocket.accept()
             self.active_connections.append(websocket)
@@ -29,6 +58,7 @@ class ConnectionManager:
             logger.error(f"Error accepting WebSocket connection: {str(e)}")
 
     def disconnect(self, websocket: WebSocket) -> None:
+        """DEPRECATED: Disconnect a WebSocket."""
         try:
             if websocket in self.active_connections:
                 self.active_connections.remove(websocket)
@@ -47,9 +77,9 @@ class ConnectionManager:
             logger.error(f"Error during WebSocket disconnection: {str(e)}")
 
     async def send_message(self, websocket: WebSocket, message: str) -> None:
+        """DEPRECATED: Send a message to a WebSocket client."""
         try:
             # Add timing information
-            import time
             start_time = time.time()
             
             # Log message size
@@ -66,6 +96,7 @@ class ConnectionManager:
             logger.error(f"Error sending message: {str(e)}")
 
     async def broadcast(self, message: str) -> None:
+        """DEPRECATED: Broadcast a message to all connected WebSocket clients."""
         if not self.active_connections:
             logger.warning("Attempted to broadcast message but no active connections exist")
             return
@@ -87,7 +118,7 @@ class ConnectionManager:
                 logger.warning("Removed failed connection from active_connections")
 
 
-# Client-side connection manager for Unity WebSocket client
+# Client-side connection manager for Unity TCP client
 class UnityConnectionManager:
     """
     Connection manager that handles automatic reconnection to Unity
@@ -117,12 +148,12 @@ class UnityConnectionManager:
         # Register event handlers
         self.client.on("disconnected", self._handle_disconnect)
     
-    async def connect(self, url: str = "ws://localhost:8080/") -> bool:
+    async def connect(self, url: str = "tcp://localhost:8080/") -> bool:
         """
-        Connect to Unity WebSocket server with automatic reconnection.
+        Connect to Unity TCP server with automatic reconnection.
         
         Args:
-            url: WebSocket server URL
+            url: TCP server URL (tcp://host:port/)
             
         Returns:
             True if connected successfully, False otherwise
@@ -149,7 +180,7 @@ class UnityConnectionManager:
     
     async def disconnect(self) -> None:
         """
-        Disconnect from Unity WebSocket server.
+        Disconnect from Unity TCP server.
         """
         if not self.client.connected:
             logger.info("Not connected to Unity")

@@ -6,7 +6,7 @@ using UnityEditor;
 namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
-    /// Monitor and report performance metrics for WebSocket communication
+    /// Monitor and report performance metrics for TCP communication
     /// </summary>
     public class CommandExecutionMonitor
     {
@@ -92,7 +92,7 @@ namespace YetAnotherUnityMcp.Editor
                 return;
             }
             
-            Debug.Log("===== WebSocket Performance Report =====");
+            Debug.Log("===== MCP Server Performance Report =====");
             Debug.Log($"Time: {DateTime.Now.ToString("HH:mm:ss")}");
             Debug.Log("Operation | Count | Avg (ms) | Min (ms) | Max (ms) | Last");
             Debug.Log("--------------------------------------------------------");

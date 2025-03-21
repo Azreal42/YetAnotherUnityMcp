@@ -93,23 +93,23 @@ fastmcp install server/mcp_server.py --name "Unity Controller"
 ```
 YetAnotherUnityMcp/
 ├── server/                      # Python MCP client
-│   ├── mcp/                     # MCP tool and resource implementations
-│   │   ├── tools/               # Tool implementations
-│   │   ├── resources/           # Resource implementations
-│   │   └── unity_client_util.py # Unity client utility functions
+│   ├── unity_client_util.py     # Unity client utility functions
 │   ├── unity_tcp_client.py      # High-level Unity TCP client
 │   ├── mcp_server.py            # MCP server implementation
-│   └── websocket_client.py      # TCP client implementation (legacy name)
+│   ├── dynamic_tool_invoker.py  # Dynamic tool invocation system
+│   ├── dynamic_tools.py         # Dynamic tool manager
+│   ├── connection_manager.py    # Connection lifecycle management
+│   └── websocket_client.py      # Low-level TCP client (legacy name)
 ├── plugin/                      # Unity C# plugin
 │   ├── Scripts/                 # Plugin source code
 │   │   ├── Editor/              # Editor extensions
 │   │   │   ├── Commands/        # Editor command implementations
 │   │   │   ├── MCPWindow.cs     # Server control window
 │   │   │   ├── MCPMenu.cs       # Unity menu integration
-│   │   │   ├── MCPTcpServer.cs  # High-level server implementation
+│   │   │   ├── MCPTcpServer.cs  # Primary TCP server implementation
 │   │   │   ├── CommandExecutionMonitor.cs # Performance monitoring
 │   │   │   ├── Models/          # Data models for Editor
-│   │   │   └── Net/             # TCP server implementation
+│   │   │   └── Net/             # TCP communication implementation
 │   │   └── YetAnotherUnityMcp.asmdef  # Assembly definition
 │   └── README.md                # Plugin documentation
 └── tests/                       # Test suite
@@ -180,7 +180,7 @@ python -m mypy .                    # Type check
 fastmcp dev server/mcp_server.py    # Run with MCP Inspector UI
 
 # Unity server development
-# Use the WebSocket Server window in Unity for debugging
+# Use the MCP Server window in Unity for debugging
 # Monitor connections and messages in real-time
 ```
 

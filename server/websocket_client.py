@@ -1,6 +1,14 @@
 """
 TCP client for connecting to Unity TCP server.
-Provides asynchronous communication with Unity using a custom framing protocol.
+
+Despite the filename, this is a TCP client implementation (not WebSocket). 
+The name is kept for backward compatibility reasons.
+
+This module provides:
+- Low-level TCP communication with the Unity server
+- Custom binary framing protocol for message boundaries
+- Reconnection and keep-alive mechanisms
+- Asynchronous request-response pattern
 """
 
 import json

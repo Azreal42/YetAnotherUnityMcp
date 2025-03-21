@@ -1,7 +1,21 @@
 """
-Unity WebSocket client for communicating with Unity (for backward compatibility)
-This is a legacy wrapper that delegates to the UnityTcpClient
+DEPRECATED: Unity Socket client compatibility wrapper
+
+This module is maintained for backward compatibility only and will be removed in a future version.
+It simply delegates all calls to the UnityTcpClient implementation.
+
+For new code, use unity_tcp_client.py directly.
 """
+
+import warnings
+
+# Show deprecation warning when module is imported
+warnings.warn(
+    "unity_socket_client is deprecated and will be removed in a future version. "
+    "Use unity_tcp_client instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import asyncio
 import logging
