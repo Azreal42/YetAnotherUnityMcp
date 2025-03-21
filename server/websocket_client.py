@@ -1,6 +1,6 @@
 """
 TCP client for connecting to Unity TCP server.
-Provides asynchronous communication with Unity.
+Provides asynchronous communication with Unity using a custom framing protocol.
 """
 
 import json
@@ -23,7 +23,7 @@ HANDSHAKE_REQUEST = "YAUM_HANDSHAKE_REQUEST"
 HANDSHAKE_RESPONSE = "YAUM_HANDSHAKE_RESPONSE"
 RECONNECT_DELAY = 2  # seconds
 
-class WebSocketClient:
+class UnityTcpClient:
     """
     TCP client for connecting to the Unity MCP TCP server.
     Named WebSocketClient for backward compatibility.
@@ -583,3 +583,7 @@ class WebSocketClient:
                     await callback()
             except Exception as e:
                 logger.error(f"Error in {event} callback: {str(e)}")
+
+# For backward compatibility
+WebSocketClient = UnityTcpClient
+LowLevelTcpClient = UnityTcpClient

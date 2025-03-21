@@ -2,38 +2,40 @@
 
 ## System Architecture 
 
-The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem. The key difference from traditional MCP setups is that Unity acts as the WebSocket server rather than the client.
+The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem. The key difference from traditional MCP setups is that Unity acts as the TCP server rather than the client.
 
 ### Unity Server Structure
 
 The Unity side is implemented as a typical Unity plugin with separate editor code. All functionality resides in the **Editor** scripts, which are only used in the Unity Editor. The core components on the Unity side are:
 
-1. **WebSocketServer**: Manages WebSocket connections, provides events for connection management, and message routing.
-2. **MCPWebSocketServer**: High-level manager for the WebSocket server with MCP-specific functionality.
-3. **WebSocketServerMCPWindow**: Editor window for managing and monitoring the server.
-4. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
-5. **WebSocketMessages**: Message types for handling communication (requests, responses, errors).
-6. **MCPRegistry**: Registry for tools and resources with schema information.
-7. **MCPToolSchema**: Schema models for tools and resources (ToolDescriptor, ResourceDescriptor, etc.).
+1. **TcpServer**: Manages TCP socket connections, provides events for connection management, and message routing.
+2. **MCPTcpServer**: High-level manager for the TCP server with MCP-specific functionality.
+3. **MCPWebSocketServer**: Legacy interface that delegates to MCPTcpServer for backward compatibility.
+4. **MCPWindow**: Editor window for managing and monitoring the server.
+5. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
+6. **TcpMessages**: Message types for handling communication (requests, responses, errors).
+7. **MCPRegistry**: Registry for tools and resources with schema information.
+8. **MCPToolSchema**: Schema models for tools and resources (ToolDescriptor, ResourceDescriptor, etc.).
 
 ### Python Client Structure
 
 The Python client uses the FastMCP framework to define the available actions and data endpoints in an organized way. Key components include:
 
 1. **mcp_server.py**: The main MCP server implementation using FastMCP with lifespan management.
-2. **unity_websocket_client.py**: The high-level client for communicating with Unity.
-3. **websocket_client.py**: The low-level WebSocket client implementation.
-4. **mcp/unity_client_util.py**: Utility functions for standardized client operations.
-5. **mcp/tools/**: Tool implementations for MCP with unified execution pattern.
+2. **unity_tcp_client.py**: The high-level client for communicating with Unity using TCP.
+3. **unity_websocket_client.py**: Legacy client that delegates to unity_tcp_client for backward compatibility.
+4. **websocket_client.py**: The low-level TCP client implementation (named for backward compatibility).
+5. **unity_client_util.py**: Utility functions for standardized client operations.
+6. **mcp/tools/**: Tool implementations for MCP with unified execution pattern.
    - **mcp/tools/get_schema.py**: Tool for retrieving available tools and resources information
    - **mcp/tools/execute_code.py**: Tool for executing C# code in Unity
    - **mcp/tools/take_screenshot.py**: Tool for capturing Unity screenshots
    - And others...
-6. **mcp/resources/**: Resource implementations for MCP with standardized error handling.
+7. **mcp/resources/**: Resource implementations for MCP with standardized error handling.
 
 The client can run in two modes:
 - **MCP mode**: Using FastMCP's built-in server with STDIO transport (via `fastmcp run` or an MCP-enabled FastAPI app).
-- **Direct mode**: A direct WebSocket client connection to Unity for testing and development.
+- **Direct mode**: A direct TCP client connection to Unity for testing and development.
 
 ## Communication Protocol (TCP & JSON)
 
@@ -152,23 +154,25 @@ By default, the system defines a set of commands that the Unity server will reco
 
 The Unity TCP server has the following components:
 
-1. **WebSocketServer** (renamed for backward compatibility but now uses TcpListener): Core server implementation that handles:
-   - Managing client connections via TCP sockets
-   - Message framing and routing
+1. **TcpServer**: Core server implementation that handles:
+   - Managing client connections via TCP sockets using System.Net.Sockets.TcpListener
+   - Message framing, parsing, and routing
    - Thread-safe message queue for processing on the main thread
-   - Performance monitoring
+   - Performance monitoring and latency tracking
    - Error handling and logging
    - Handshake and connection management
    - Ping/pong protocol for connection health
 
-2. **MCPWebSocketServer**: High-level manager that provides:
+2. **MCPTcpServer**: High-level manager that provides:
    - Command processing for MCP tools
    - JSON serialization/deserialization
    - Client tracking with connection information
    - Logging and monitoring functions
    - Interface for other Unity scripts to use
 
-3. **WebSocketServerMCPWindow**: Editor window that provides:
+3. **MCPWebSocketServer**: Legacy interface that delegates to MCPTcpServer for backward compatibility.
+
+4. **MCPWindow**: Editor window that provides:
    - Server controls (start/stop)
    - Connected client list
    - Message log for debugging
@@ -178,20 +182,22 @@ The Unity TCP server has the following components:
 
 The Python client implementation includes:
 
-1. **WebSocketClient** (renamed for backward compatibility but now uses raw TCP sockets): Low-level client that handles:
-   - Connection to Unity server with retry mechanism
-   - Message framing, sending, and receiving
-   - Request-response tracking with IDs
+1. **WebSocketClient** (class name kept for backward compatibility): Low-level client that handles:
+   - Connection to Unity server using asyncio TCP sockets with retry mechanism
+   - Message framing, sending, and receiving with binary protocol
+   - Request-response tracking with unique IDs
    - Event-based communication (connected, disconnected, message, error)
    - Async/await interface for Python
    - Automatic reconnection and keep-alive pings
 
-2. **UnityWebSocketClient**: High-level client that provides:
+2. **UnityTcpClient**: High-level client that provides:
    - Higher-level APIs for Unity commands (execute_code, take_screenshot, etc.)
    - Callback registration for status events
    - Error handling and logging
 
-3. **unity_client_util**: Utility module that provides:
+3. **UnityWebSocketClient**: Legacy interface that delegates to UnityTcpClient for backward compatibility.
+
+4. **unity_client_util**: Utility module that provides:
    - Standardized execution pattern for all operations
    - Automatic reconnection attempts
    - Consistent error handling and formatting
