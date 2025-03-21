@@ -244,35 +244,75 @@ class WebSocketClient:
         
         try:
             # Read until start marker (STX)
-            while True:
-                b = await self.reader.readexactly(1)
-                if b[0] == START_MARKER:
-                    break
-                
+            logger.debug("Waiting for start marker (STX)...")
+            bytes_checked = 0
+            start_marker_found = False
+            
+            # Store initial bytes for debugging
+            initial_bytes = bytearray()
+            
+            while bytes_checked < 1000:  # Reasonable limit to avoid infinite loop
+                try:
+                    b = await asyncio.wait_for(self.reader.readexactly(1), timeout=0.5)
+                    bytes_checked += 1
+                    
+                    # Store initial bytes for debugging (up to 16 bytes)
+                    if len(initial_bytes) < 16:
+                        initial_bytes.append(b[0])
+                    
+                    if b[0] == START_MARKER:
+                        logger.debug(f"Found start marker (STX) after {bytes_checked} bytes")
+                        start_marker_found = True
+                        break
+                    
+                    # Log occasionally
+                    if bytes_checked % 10 == 0:
+                        hex_initial = ' '.join(f'{b:02x}' for b in initial_bytes)
+                        logger.debug(f"Checked {bytes_checked} bytes, no start marker yet. Initial bytes: {hex_initial}")
+                except asyncio.TimeoutError:
+                    # Timeout reading, try again
+                    continue
+                except asyncio.IncompleteReadError:
+                    logger.error("Connection closed while waiting for start marker")
+                    return None
+            
+            if not start_marker_found:
+                hex_initial = ' '.join(f'{b:02x}' for b in initial_bytes)
+                logger.error(f"No start marker found after {bytes_checked} bytes. Initial bytes: {hex_initial}")
+                return None
+            
             # Read message length (4 bytes)
-            length_bytes = await self.reader.readexactly(4)
-            message_length = struct.unpack("<I", length_bytes)[0]
-            
-            # Sanity check for message length
-            if message_length <= 0 or message_length > 10 * 1024 * 1024:  # Max 10 MB
-                logger.error(f"Invalid message length: {message_length}")
+            logger.debug("Reading message length (4 bytes)...")
+            try:
+                length_bytes = await self.reader.readexactly(4)
+                message_length = struct.unpack("<I", length_bytes)[0]
+                
+                # Sanity check for message length
+                if message_length <= 0 or message_length > 10 * 1024 * 1024:  # Max 10 MB
+                    logger.error(f"Invalid message length: {message_length}")
+                    return None
+                
+                logger.debug(f"Message length: {message_length} bytes")
+                
+                # Read message data
+                logger.debug(f"Reading message data ({message_length} bytes)...")
+                message_bytes = await self.reader.readexactly(message_length)
+                
+                # Read end marker (ETX)
+                logger.debug("Reading end marker (ETX)...")
+                end_marker = await self.reader.readexactly(1)
+                if end_marker[0] != END_MARKER:
+                    logger.error(f"Missing end marker, got: {end_marker[0]:02x}")
+                    return None
+                
+                # Convert to string
+                message = message_bytes.decode('utf-8')
+                logger.debug(f"Successfully received framed message: {message[:100]}...")
+                return message
+            except asyncio.IncompleteReadError:
+                logger.error("Connection closed while reading message")
                 return None
             
-            # Read message data
-            message_bytes = await self.reader.readexactly(message_length)
-            
-            # Read end marker (ETX)
-            end_marker = await self.reader.readexactly(1)
-            if end_marker[0] != END_MARKER:
-                logger.error(f"Missing end marker, got: {end_marker[0]}")
-                return None
-            
-            # Convert to string
-            return message_bytes.decode('utf-8')
-            
-        except asyncio.IncompleteReadError:
-            # Connection closed
-            return None
         except Exception as e:
             logger.error(f"Error receiving frame: {str(e)}")
             return None
