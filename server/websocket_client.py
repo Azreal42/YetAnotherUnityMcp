@@ -171,16 +171,26 @@ class WebSocketClient:
             True if handshake was successful, False otherwise
         """
         try:
-            # Send handshake request
-            logger.info(f"Sending handshake request: {HANDSHAKE_REQUEST}")
-            self.writer.write(HANDSHAKE_REQUEST.encode('utf-8'))
+            # Send handshake request - ensure it's exactly the expected string with no CR/LF
+            handshake_bytes = HANDSHAKE_REQUEST.encode('utf-8')
+            logger.info(f"Sending handshake request: {HANDSHAKE_REQUEST} ({len(handshake_bytes)} bytes)")
+            # Log hex representation for debugging
+            hex_bytes = ' '.join(f'{b:02x}' for b in handshake_bytes)
+            logger.info(f"Handshake bytes: {hex_bytes}")
+            
+            self.writer.write(handshake_bytes)
             await self.writer.drain()
             
             # Read handshake response with timeout
             logger.info("Waiting for handshake response...")
             response_bytes = await asyncio.wait_for(self.reader.read(1024), timeout=5.0)
-            response = response_bytes.decode('utf-8')
-            logger.info(f"Received handshake response: {response}")
+            
+            # Log hex representation for debugging
+            hex_bytes = ' '.join(f'{b:02x}' for b in response_bytes)
+            logger.info(f"Response bytes: {hex_bytes}")
+            
+            response = response_bytes.decode('utf-8').strip()
+            logger.info(f"Received handshake response: '{response}' ({len(response_bytes)} bytes)")
             
             if response == HANDSHAKE_RESPONSE:
                 logger.info("Handshake successful")
