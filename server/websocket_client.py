@@ -194,6 +194,9 @@ class WebSocketClient:
             
             if response == HANDSHAKE_RESPONSE:
                 logger.info("Handshake successful")
+                # Add a delay to ensure server is ready
+                await asyncio.sleep(0.5)
+                logger.info("Handshake completed, now ready for framed communication")
                 return True
             else:
                 logger.error(f"Invalid handshake response: {response}")
@@ -410,9 +413,20 @@ class WebSocketClient:
             logger.error("TCP not connected")
             return
         
+        logger.info("Starting message receive loop")
+        
         # Send a ping every 30 seconds
         ping_interval = 30
         last_ping_time = time.time()
+        
+        # Send an initial ping right away to make sure the framing works
+        try:
+            logger.info("Sending initial PING to test framing...")
+            await self._send_frame(PING_MESSAGE)
+            logger.info("Initial PING sent successfully")
+        except Exception as e:
+            logger.error(f"Error sending initial ping: {str(e)}")
+            # Continue anyway, we'll try to recover
             
         try:
             while self.connected:
@@ -420,8 +434,10 @@ class WebSocketClient:
                 current_time = time.time()
                 if current_time - last_ping_time >= ping_interval:
                     try:
+                        logger.info("Sending periodic PING...")
                         await self._send_frame(PING_MESSAGE)
                         last_ping_time = current_time
+                        logger.info("PING sent successfully")
                     except Exception as e:
                         logger.error(f"Error sending ping: {str(e)}")
                         break  # Connection likely broken
@@ -429,6 +445,7 @@ class WebSocketClient:
                 # Try to read with a short timeout
                 try:
                     # Use wait_for with a short timeout to allow for ping checks
+                    logger.debug("Waiting to receive frame from server...")
                     message = await asyncio.wait_for(self._receive_frame(), timeout=1.0)
                     
                     # Check if connection closed

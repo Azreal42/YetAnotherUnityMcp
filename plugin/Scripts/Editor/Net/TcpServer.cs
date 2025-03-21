@@ -374,6 +374,8 @@ namespace YetAnotherUnityMcp.Editor.Net
         {
             try
             {
+                Debug.Log("[TCP Server] Client connected: " + client.Client.RemoteEndPoint);
+                
                 // Configure the TcpClient
                 client.NoDelay = true; // Disable Nagle's algorithm for better responsiveness
                 client.ReceiveBufferSize = _bufferSize;
@@ -515,6 +517,8 @@ namespace YetAnotherUnityMcp.Editor.Net
             byte[] buffer = new byte[_bufferSize];
             var stream = connection.Client.GetStream();
             
+            Debug.Log($"[TCP Server] Starting message receive loop for client {connection.Id}");
+            
             try
             {
                 while (connection.IsConnected && 
@@ -522,16 +526,56 @@ namespace YetAnotherUnityMcp.Editor.Net
                 {
                     try
                     {
+                        Debug.Log($"[TCP Server] Waiting for start marker (STX) from client {connection.Id}...");
+                        
                         // Wait for the start marker (STX)
                         int b;
-                        while ((b = stream.ReadByte()) != START_MARKER)
+                        int bytesChecked = 0;
+                        bool startMarkerFound = false;
+                        
+                        // Temporary buffer to log initial bytes
+                        byte[] initialBytes = new byte[16];
+                        int initialBytesCount = 0;
+                        
+                        while (bytesChecked < 1000) // Set a reasonable limit to avoid infinite loop
                         {
+                            b = stream.ReadByte();
+                            bytesChecked++;
+                            
+                            // Store initial bytes for debugging
+                            if (initialBytesCount < initialBytes.Length && b != -1)
+                            {
+                                initialBytes[initialBytesCount++] = (byte)b;
+                            }
+                            
+                            if (b == START_MARKER)
+                            {
+                                Debug.Log($"[TCP Server] Found start marker (STX) after {bytesChecked} bytes");
+                                startMarkerFound = true;
+                                break;
+                            }
+                            
                             if (b == -1) // End of stream
                             {
+                                Debug.LogError($"[TCP Server] Client {connection.Id} disconnected while waiting for start marker");
                                 throw new EndOfStreamException("Client disconnected");
                             }
                             
+                            // Log occasionally
+                            if (bytesChecked % 10 == 0)
+                            {
+                                string hexInitial = BitConverter.ToString(initialBytes, 0, initialBytesCount);
+                                Debug.Log($"[TCP Server] Checked {bytesChecked} bytes, no start marker yet. Initial bytes: {hexInitial}");
+                            }
+                            
                             await Task.Yield(); // Allow Unity to breathe
+                        }
+                        
+                        if (!startMarkerFound)
+                        {
+                            string hexInitial = BitConverter.ToString(initialBytes, 0, initialBytesCount);
+                            Debug.LogError($"[TCP Server] No start marker found after {bytesChecked} bytes. Initial bytes: {hexInitial}");
+                            continue;
                         }
                         
                         // Read message length (4 bytes)
