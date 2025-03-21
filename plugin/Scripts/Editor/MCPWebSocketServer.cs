@@ -12,22 +12,22 @@ using YetAnotherUnityMcp.Editor.Net;
 namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
-    /// Server for handling TCP MCP connections from clients
+    /// Server for handling WebSocket MCP connections from clients
     /// </summary>
-    public class MCPTcpServer
+    public class MCPWebSocketServer
     {
-        private static MCPTcpServer _instance;
+        private static MCPWebSocketServer _instance;
         
         /// <summary>
         /// Singleton instance
         /// </summary>
-        public static MCPTcpServer Instance
+        public static MCPWebSocketServer Instance
         {
             get
             {
                 if (_instance == null)
                 {
-                    _instance = new MCPTcpServer();
+                    _instance = new MCPWebSocketServer();
                 }
                 return _instance;
             }
@@ -81,7 +81,7 @@ namespace YetAnotherUnityMcp.Editor
         /// </summary>
         public event Action<string> OnError;
 
-        private MCPTcpServer()
+        private MCPWebSocketServer()
         {
             _server = new TcpServer();
             _activeClients = new Dictionary<string, string>();
@@ -96,7 +96,7 @@ namespace YetAnotherUnityMcp.Editor
         }
         
         /// <summary>
-        /// Start the MCP TCP server
+        /// Start the MCP WebSocket server
         /// </summary>
         /// <param name="host">Hostname to bind to (default: localhost)</param>
         /// <param name="port">Port to listen on (default: 8080)</param>
@@ -107,7 +107,7 @@ namespace YetAnotherUnityMcp.Editor
         }
         
         /// <summary>
-        /// Stop the MCP TCP server
+        /// Stop the MCP WebSocket server
         /// </summary>
         public async Task StopAsync()
         {
@@ -141,7 +141,7 @@ namespace YetAnotherUnityMcp.Editor
         /// </summary>
         private void HandleServerStarted()
         {
-            Debug.Log($"[MCP TCP Server] Started on {_server.ServerUrl}");
+            Debug.Log($"[MCP WebSocket Server] Started on {_server.ServerUrl}");
             OnServerStarted?.Invoke();
         }
         
@@ -150,7 +150,7 @@ namespace YetAnotherUnityMcp.Editor
         /// </summary>
         private void HandleServerStopped()
         {
-            Debug.Log("[MCP TCP Server] Stopped");
+            Debug.Log("[MCP WebSocket Server] Stopped");
             OnServerStopped?.Invoke();
         }
         
@@ -164,7 +164,7 @@ namespace YetAnotherUnityMcp.Editor
             
             _activeClients[clientId] = clientInfo;
             
-            Debug.Log($"[MCP TCP Server] Client connected: {clientId} ({clientInfo})");
+            Debug.Log($"[MCP WebSocket Server] Client connected: {clientId} ({clientInfo})");
             OnClientConnected?.Invoke(clientId);
         }
         
@@ -180,7 +180,7 @@ namespace YetAnotherUnityMcp.Editor
                 string clientInfo = _activeClients[clientId];
                 _activeClients.Remove(clientId);
                 
-                Debug.Log($"[MCP TCP Server] Client disconnected: {clientId} ({clientInfo})");
+                Debug.Log($"[MCP WebSocket Server] Client disconnected: {clientId} ({clientInfo})");
                 OnClientDisconnected?.Invoke(clientId);
             }
         }
@@ -201,7 +201,7 @@ namespace YetAnotherUnityMcp.Editor
                 // Check for required fields
                 if (!(request.TryGetValue("id", out object idObj) && idObj is string requestId))
                 {
-                    Debug.LogError($"[MCP TCP Server] Invalid request from client {clientId}: Missing ID");
+                    Debug.LogError($"[MCP WebSocket Server] Invalid request from client {clientId}: Missing ID");
                     SendErrorResponse(clientId, "error_id", "Invalid request: Missing ID");
                     return;
                 }
@@ -217,12 +217,12 @@ namespace YetAnotherUnityMcp.Editor
                 {
                     // This is a response to a request we sent
                     // Currently, the server doesn't initiate requests, so we'll just log this
-                    Debug.Log($"[MCP TCP Server] Received response to request {requestId} from client {clientId}");
+                    Debug.Log($"[MCP WebSocket Server] Received response to request {requestId} from client {clientId}");
                 }
                 else
                 {
                     // Unknown request type
-                    Debug.LogError($"[MCP TCP Server] Unknown request type from client {clientId}");
+                    Debug.LogError($"[MCP WebSocket Server] Unknown request type from client {clientId}");
                     SendErrorResponse(clientId, requestId.ToString(), "Unknown request type");
                 }
                 
@@ -231,7 +231,7 @@ namespace YetAnotherUnityMcp.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MCP TCP Server] Error handling message from client {clientId}: {ex.Message}");
+                Debug.LogError($"[MCP WebSocket Server] Error handling message from client {clientId}: {ex.Message}");
                 SendErrorResponse(clientId, "error", $"Error handling message: {ex.Message}");
             }
         }
@@ -241,7 +241,7 @@ namespace YetAnotherUnityMcp.Editor
         /// </summary>
         private void HandleError(string error)
         {
-            Debug.LogError($"[MCP TCP Server] Error: {error}");
+            Debug.LogError($"[MCP WebSocket Server] Error: {error}");
             OnError?.Invoke(error);
         }
         
@@ -337,7 +337,7 @@ namespace YetAnotherUnityMcp.Editor
             catch (Exception ex)
             {
                 error = $"Error executing command {command}: {ex.Message}";
-                Debug.LogError($"[MCP TCP Server] {error}");
+                Debug.LogError($"[MCP WebSocket Server] {error}");
             }
             
             // Send the response
@@ -365,7 +365,7 @@ namespace YetAnotherUnityMcp.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MCP TCP Server] Error sending response to client {clientId}: {ex.Message}");
+                Debug.LogError($"[MCP WebSocket Server] Error sending response to client {clientId}: {ex.Message}");
             }
         }
         
@@ -390,7 +390,7 @@ namespace YetAnotherUnityMcp.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MCP TCP Server] Error sending error response to client {clientId}: {ex.Message}");
+                Debug.LogError($"[MCP WebSocket Server] Error sending error response to client {clientId}: {ex.Message}");
             }
         }
     }
