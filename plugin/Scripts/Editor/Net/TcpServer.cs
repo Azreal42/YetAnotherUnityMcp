@@ -544,6 +544,9 @@ namespace YetAnotherUnityMcp.Editor.Net
             
             Debug.Log($"[TCP Server] Starting message receive loop for client {connection.Id}");
             
+            // Setup a ping timer for this client to keep the connection alive
+            System.Timers.Timer pingTimer = new System.Timers.Timer(30000); // 30 seconds
+            
             // Create a dedicated cancellation token source for this client
             using (var clientCts = new CancellationTokenSource())
             using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -551,8 +554,6 @@ namespace YetAnotherUnityMcp.Editor.Net
             {
                 try
                 {
-                    // Setup a ping timer for this client to keep the connection alive
-                    var pingTimer = new System.Timers.Timer(30000); // 30 seconds
                     pingTimer.Elapsed += async (s, e) =>
                     {
                         try
