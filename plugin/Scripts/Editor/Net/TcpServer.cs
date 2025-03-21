@@ -385,29 +385,54 @@ namespace YetAnotherUnityMcp.Editor.Net
                 string connectionId = Guid.NewGuid().ToString();
                 var connection = new TcpConnection(connectionId, client);
                 
-                // Perform handshake
-                if (!await PerformHandshake(connection))
+                // Run handshake and message handling in a background thread to avoid freezing Unity
+                await Task.Run(async () => 
                 {
-                    // Handshake failed, close the connection
-                    await connection.CloseAsync("Handshake failed");
-                    return;
-                }
-                
-                // Add to active connections
-                _connections.TryAdd(connectionId, connection);
-                
-                // Notify of new connection
-                _messageQueue.Enqueue(new TcpStatusMessage(
-                    $"Client connected: {connectionId} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}"));
-                RaiseClientConnected(connection);
-                
-                // Start receiving messages from this client
-                await ReceiveMessagesAsync(connection);
+                    try
+                    {
+                        // Perform handshake (in the background thread)
+                        if (!await PerformHandshake(connection))
+                        {
+                            // Handshake failed, close the connection
+                            await connection.CloseAsync("Handshake failed");
+                            return;
+                        }
+                        
+                        // Add to active connections (thread-safe)
+                        _connections.TryAdd(connectionId, connection);
+                        
+                        // Queue notification message for main thread
+                        _messageQueue.Enqueue(new TcpStatusMessage(
+                            $"Client connected: {connectionId} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}"));
+                        
+                        // Need to use helper method to invoke event on main thread later via the message queue
+                        _messageQueue.Enqueue(new TcpConnectMessage(connection, this));
+                        
+                        // Start receiving messages from this client (still in background thread)
+                        await ReceiveMessagesAsync(connection);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Queue error message for main thread
+                        _messageQueue.Enqueue(new TcpErrorMessage($"Error handling client {connectionId}: {ex.Message}"));
+                        
+                        // Remove from connections if added
+                        if (_connections.TryRemove(connectionId, out _))
+                        {
+                            _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {connectionId} disconnected due to error"));
+                        }
+                        
+                        // Close connection
+                        try { connection.Client.Close(); } catch { }
+                    }
+                });
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[TCP Server] Error handling client connection: {ex.Message}");
-                RaiseError($"Error handling client connection: {ex.Message}");
+                // Log the error but we don't need to do anything else here since the Task.Run in the method
+                // body already has its own error handling that will close connections and clean up
+                Debug.LogError($"[TCP Server] Error initializing client connection: {ex.Message}");
+                _messageQueue.Enqueue(new TcpErrorMessage($"Error initializing client connection: {ex.Message}"));
                 
                 // Ensure the client is properly closed
                 try { client.Close(); } catch { }
@@ -462,8 +487,8 @@ namespace YetAnotherUnityMcp.Editor.Net
                             break;
                         }
                         
-                        // Short delay to avoid busy waiting
-                        await Task.Delay(10);
+                                // Use Task.Yield() to ensure the main thread isn't blocked
+                        await Task.Yield();
                     }
                 }
                 catch (OperationCanceledException)
@@ -519,17 +544,40 @@ namespace YetAnotherUnityMcp.Editor.Net
             
             Debug.Log($"[TCP Server] Starting message receive loop for client {connection.Id}");
             
-            try
+            // Create a dedicated cancellation token source for this client
+            using (var clientCts = new CancellationTokenSource())
+            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _cancellationTokenSource.Token, clientCts.Token))
             {
-                while (connection.IsConnected && 
-                       !_cancellationTokenSource.Token.IsCancellationRequested)
+                try
+                {
+                    // Setup a ping timer for this client to keep the connection alive
+                    var pingTimer = new System.Timers.Timer(30000); // 30 seconds
+                    pingTimer.Elapsed += async (s, e) =>
+                    {
+                        try
+                        {
+                            // Only send ping if connected
+                            if (connection.IsConnected && !linkedCts.Token.IsCancellationRequested)
+                            {
+                                await connection.SendAsync(PING_MESSAGE);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"[TCP Server] Error sending ping to client {connection.Id}: {ex.Message}");
+                        }
+                    };
+                    pingTimer.Start();
+                    
+                    while (connection.IsConnected && 
+                           !linkedCts.Token.IsCancellationRequested)
                 {
                     try
                     {
                         Debug.Log($"[TCP Server] Waiting for start marker (STX) from client {connection.Id}...");
                         
-                        // Wait for the start marker (STX)
-                        int b;
+                        // Wait for the start marker (STX) using async method with timeout
                         int bytesChecked = 0;
                         bool startMarkerFound = false;
                         
@@ -537,38 +585,63 @@ namespace YetAnotherUnityMcp.Editor.Net
                         byte[] initialBytes = new byte[16];
                         int initialBytesCount = 0;
                         
-                        while (bytesChecked < 1000) // Set a reasonable limit to avoid infinite loop
+                        // Create a timeout for the read operation
+                        using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
                         {
-                            b = stream.ReadByte();
-                            bytesChecked++;
-                            
-                            // Store initial bytes for debugging
-                            if (initialBytesCount < initialBytes.Length && b != -1)
+                            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                                timeoutCts.Token, _cancellationTokenSource.Token))
                             {
-                                initialBytes[initialBytesCount++] = (byte)b;
+                                try 
+                                {
+                                    // Set a limit to avoid infinite loops
+                                    while (bytesChecked < 1000 && !linkedCts.Token.IsCancellationRequested)
+                                    {
+                                        // Read one byte asynchronously with timeout
+                                        byte[] oneByte = new byte[1];
+                                        int bytesRead = await stream.ReadAsync(oneByte, 0, 1, linkedCts.Token);
+                                        
+                                        if (bytesRead == 0)
+                                        {
+                                            Debug.LogError($"[TCP Server] Client {connection.Id} disconnected while waiting for start marker");
+                                            throw new EndOfStreamException("Client disconnected");
+                                        }
+                                        
+                                        byte b = oneByte[0];
+                                        bytesChecked++;
+                                        
+                                        // Store initial bytes for debugging
+                                        if (initialBytesCount < initialBytes.Length)
+                                        {
+                                            initialBytes[initialBytesCount++] = b;
+                                        }
+                                        
+                                        if (b == START_MARKER)
+                                        {
+                                            Debug.Log($"[TCP Server] Found start marker (STX) after {bytesChecked} bytes");
+                                            startMarkerFound = true;
+                                            break;
+                                        }
+                                        
+                                        // Log occasionally
+                                        if (bytesChecked % 10 == 0)
+                                        {
+                                            string hexInitial = BitConverter.ToString(initialBytes, 0, initialBytesCount);
+                                            Debug.Log($"[TCP Server] Checked {bytesChecked} bytes, no start marker yet. Initial bytes: {hexInitial}");
+                                        }
+                                        
+                                        // Allow other tasks to run
+                                        await Task.Yield();
+                                    }
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    if (timeoutCts.Token.IsCancellationRequested && !_cancellationTokenSource.Token.IsCancellationRequested)
+                                    {
+                                        Debug.LogWarning($"[TCP Server] Timeout while waiting for start marker from client {connection.Id}");
+                                    }
+                                    throw; // Re-throw for outer catch to handle
+                                }
                             }
-                            
-                            if (b == START_MARKER)
-                            {
-                                Debug.Log($"[TCP Server] Found start marker (STX) after {bytesChecked} bytes");
-                                startMarkerFound = true;
-                                break;
-                            }
-                            
-                            if (b == -1) // End of stream
-                            {
-                                Debug.LogError($"[TCP Server] Client {connection.Id} disconnected while waiting for start marker");
-                                throw new EndOfStreamException("Client disconnected");
-                            }
-                            
-                            // Log occasionally
-                            if (bytesChecked % 10 == 0)
-                            {
-                                string hexInitial = BitConverter.ToString(initialBytes, 0, initialBytesCount);
-                                Debug.Log($"[TCP Server] Checked {bytesChecked} bytes, no start marker yet. Initial bytes: {hexInitial}");
-                            }
-                            
-                            await Task.Yield(); // Allow Unity to breathe
                         }
                         
                         if (!startMarkerFound)
@@ -613,11 +686,48 @@ namespace YetAnotherUnityMcp.Editor.Net
                             bytesRead += n;
                         }
                         
-                        // Read end marker (ETX)
-                        b = stream.ReadByte();
-                        if (b != END_MARKER)
+                        // Read end marker (ETX) asynchronously with timeout
+                        byte[] endMarkerBytes = new byte[1];
+                        try
                         {
-                            Debug.LogError($"[TCP Server] Missing end marker, got: {b}");
+                            // Use a timeout to avoid blocking forever
+                            using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+                            {
+                                using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                                    timeoutCts.Token, _cancellationTokenSource.Token))
+                                {
+                                    int bytesRead = await stream.ReadAsync(endMarkerBytes, 0, 1, linkedCts.Token);
+                                    
+                                    if (bytesRead == 0)
+                                    {
+                                        throw new EndOfStreamException("Client disconnected while reading end marker");
+                                    }
+                                }
+                            }
+                            
+                            byte endMarker = endMarkerBytes[0];
+                            if (endMarker != END_MARKER)
+                            {
+                                Debug.LogError($"[TCP Server] Missing end marker, got: {endMarker}");
+                                
+                                // If this looks like the end of JSON ('}'), we'll be more forgiving
+                                if (endMarker == 0x7D) // '}'
+                                {
+                                    string message = Encoding.UTF8.GetString(messageData);
+                                    if (message.TrimEnd().EndsWith("}"))
+                                    {
+                                        Debug.LogWarning("[TCP Server] Got '}' instead of ETX - appears to be valid JSON, accepting anyway");
+                                        // Queue the message for processing on the main thread
+                                        _messageQueue.Enqueue(new TcpJsonMessage(message, connection));
+                                    }
+                                }
+                                
+                                continue;
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Debug.LogWarning($"[TCP Server] Timeout while reading end marker from client {connection.Id}");
                             continue;
                         }
                         
@@ -656,30 +766,38 @@ namespace YetAnotherUnityMcp.Editor.Net
                         break;
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                if (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    Debug.LogError($"[TCP Server] Unexpected error for client {connection.Id}: {ex.Message}");
                 }
-            }
-            finally
-            {
-                // Ensure the connection is removed from active connections
-                if (_connections.TryRemove(connection.Id, out _))
+                catch (Exception ex)
                 {
-                    // Queue the disconnect message
-                    _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {connection.Id} disconnected"));
-                    RaiseClientDisconnected(connection);
+                    if (!linkedCts.Token.IsCancellationRequested)
+                    {
+                        Debug.LogError($"[TCP Server] Unexpected error for client {connection.Id}: {ex.Message}");
+                    }
                 }
-                
-                // Close the connection
-                try
+                finally
                 {
-                    connection.Client.Close();
+                    // Stop the ping timer
+                    pingTimer.Stop();
+                    pingTimer.Dispose();
+                    
+                    // Ensure the connection is removed from active connections
+                    if (_connections.TryRemove(connection.Id, out _))
+                    {
+                        // Queue the disconnect message for main thread processing
+                        // This will also invoke the OnClientDisconnected event on the main thread
+                        _messageQueue.Enqueue(new TcpDisconnectMessage($"Client {connection.Id} disconnected", connection));
+                        
+                        // Queue disconnect notification for main thread
+                        _messageQueue.Enqueue(new TcpStatusMessage($"Client {connection.Id} disconnected", LogType.Warning));
+                    }
+                    
+                    // Close the connection
+                    try
+                    {
+                        connection.Client.Close();
+                    }
+                    catch { /* Ignore errors during cleanup */ }
                 }
-                catch { /* Ignore errors during cleanup */ }
             }
         }
         
@@ -724,22 +842,32 @@ namespace YetAnotherUnityMcp.Editor.Net
         {
             try
             {
-                // Process up to 10 messages per frame to avoid frame rate drops
-                int messagesToProcess = Math.Min(_messageQueue.Count, 10);
+                // Use a time-based approach to avoid blocking the main thread for too long
+                DateTime startTime = DateTime.Now;
+                int processedCount = 0;
+                int maxTimeMs = 5; // Max milliseconds to spend processing messages per frame
                 
-                for (int i = 0; i < messagesToProcess; i++)
+                // Process messages until we reach time limit or the queue is empty
+                while (!_messageQueue.IsEmpty && (DateTime.Now - startTime).TotalMilliseconds < maxTimeMs && processedCount < 20)
                 {
                     // Try to dequeue a message
                     if (_messageQueue.TryDequeue(out ITcpMessage message))
                     {
                         // Process the message - handle all event invocation
                         message.Process(this);
+                        processedCount++;
                     }
                     else
                     {
                         // Queue is empty, stop processing
                         break;
                     }
+                }
+                
+                // If we still have many messages, log a warning
+                if (_messageQueue.Count > 50)
+                {
+                    Debug.LogWarning($"[TCP Server] Message queue still has {_messageQueue.Count} messages after processing {processedCount}");
                 }
             }
             catch (Exception ex)
@@ -815,12 +943,35 @@ namespace YetAnotherUnityMcp.Editor.Net
             
             Debug.Log($"[TCP Server] Frame includes STX (0x{TcpServer.START_MARKER:X2}) at start and ETX (0x{TcpServer.END_MARKER:X2}) at end");
             
-            // Write the entire frame as a single atomic operation
+            // Write the entire frame as a single atomic operation with timeout
             NetworkStream stream = Client.GetStream();
-            await stream.WriteAsync(frameBuffer, 0, totalLength);
-            await stream.FlushAsync(); // Ensure all data is sent
             
-            Debug.Log("[TCP Server] Message frame sent completely in a single operation");
+            try
+            {
+                // Create a cancellation token with timeout to avoid blocking forever
+                using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+                {
+                    // Write with timeout
+                    var writeTask = stream.WriteAsync(frameBuffer, 0, totalLength, timeoutCts.Token);
+                    await writeTask;
+                    
+                    // Flush stream with timeout
+                    var flushTask = stream.FlushAsync(timeoutCts.Token);
+                    await flushTask;
+                    
+                    Debug.Log("[TCP Server] Message frame sent successfully");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.LogWarning("[TCP Server] Send operation timed out");
+                throw new TimeoutException("Send operation timed out");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[TCP Server] Error sending frame: {ex.Message}");
+                throw;
+            }
         }
         
         /// <summary>

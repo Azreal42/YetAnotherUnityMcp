@@ -133,11 +133,20 @@ namespace YetAnotherUnityMcp.Editor.Net
     {
         public string Reason { get; }
         public string ConnectionId { get; }
+        public TcpConnection Connection { get; }
         
         public TcpDisconnectMessage(string reason = "", string connectionId = null)
         {
             Reason = reason;
             ConnectionId = connectionId;
+            Connection = null;
+        }
+        
+        public TcpDisconnectMessage(string reason, TcpConnection connection)
+        {
+            Reason = reason;
+            ConnectionId = connection?.Id;
+            Connection = connection;
         }
         
         public void Process(TcpServer server)
@@ -149,6 +158,12 @@ namespace YetAnotherUnityMcp.Editor.Net
             else
             {
                 Debug.Log("[TCP Server] Disconnected");
+            }
+            
+            // If we have a connection object, raise the disconnected event
+            if (Connection != null)
+            {
+                server.RaiseClientDisconnected(Connection);
             }
         }
     }
@@ -181,6 +196,28 @@ namespace YetAnotherUnityMcp.Editor.Net
                     Debug.Log($"[TCP Server] {Status}");
                     break;
             }
+        }
+    }
+    
+    /// <summary>
+    /// Message for handling client connection events on the main thread
+    /// </summary>
+    public class TcpConnectMessage : ITcpMessage
+    {
+        public TcpConnection Connection { get; }
+        private TcpServer _server;
+        
+        public TcpConnectMessage(TcpConnection connection, TcpServer server)
+        {
+            Connection = connection;
+            _server = server;
+        }
+        
+        public void Process(TcpServer server)
+        {
+            // Notify of client connection on the main thread
+            Debug.Log($"[TCP Server] Processing connection notification for client {Connection.Id}");
+            server.RaiseClientConnected(Connection);
         }
     }
 }
