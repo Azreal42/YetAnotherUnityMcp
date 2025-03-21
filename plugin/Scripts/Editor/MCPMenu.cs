@@ -1,12 +1,12 @@
 using System;
 using UnityEngine;
 using UnityEditor;
-using YetAnotherUnityMcp.Editor.WebSocket;
+using YetAnotherUnityMcp.Editor.Net;
 
 namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
-    /// Menu items for MCP WebSocket Server
+    /// Menu items for MCP TCP Server
     /// </summary>
     public static class MCPMenu
     {
@@ -15,10 +15,10 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                bool result = await MCPWebSocketServer.Instance.StartAsync();
+                bool result = await MCPTcpServer.Instance.StartAsync();
                 if (result)
                 {
-                    Debug.Log($"[MCP Menu] Server started on {MCPWebSocketServer.Instance.ServerUrl}");
+                    Debug.Log($"[MCP Menu] Server started on {MCPTcpServer.Instance.ServerUrl}");
                 }
                 else
                 {
@@ -34,7 +34,7 @@ namespace YetAnotherUnityMcp.Editor
         [MenuItem("MCP/Server/Start Server", true)]
         public static bool ValidateStartServer()
         {
-            return !MCPWebSocketServer.Instance.IsRunning;
+            return !MCPTcpServer.Instance.IsRunning;
         }
         
         [MenuItem("MCP/Server/Stop Server")]
@@ -42,7 +42,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                await MCPWebSocketServer.Instance.StopAsync();
+                await MCPTcpServer.Instance.StopAsync();
                 Debug.Log("[MCP Menu] Server stopped");
             }
             catch (Exception ex)
@@ -54,7 +54,7 @@ namespace YetAnotherUnityMcp.Editor
         [MenuItem("MCP/Server/Stop Server", true)]
         public static bool ValidateStopServer()
         {
-            return MCPWebSocketServer.Instance.IsRunning;
+            return MCPTcpServer.Instance.IsRunning;
         }
         
         [MenuItem("MCP/Server/Show Server Window")]

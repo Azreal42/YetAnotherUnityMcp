@@ -9,13 +9,13 @@ A Unity Master Control Protocol (MCP) implementation that allows AI agents to co
 
 ## Overview
 
-**YetAnotherUnityMcp** is a system that bridges the Unity game engine with AI-driven tools using the **Model Context Protocol (MCP)**. It consists of a Unity **.NET/C# plugin** acting as the MCP WebSocket server, and a **Python MCP client** (built with FastMCP) that handles requests from AI agents. Communication between Unity and the client is done via **WebSockets**, enabling real-time, bidirectional exchange of JSON messages and image data.
+**YetAnotherUnityMcp** is a system that bridges the Unity game engine with AI-driven tools using the **Model Context Protocol (MCP)**. It consists of a Unity **.NET/C# plugin** acting as the MCP TCP server, and a **Python MCP client** (built with FastMCP) that handles requests from AI agents. Communication between Unity and the client is done via a **custom TCP protocol**, enabling real-time, bidirectional exchange of JSON messages and image data.
 
 This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents (e.g. an LLM-based assistant) to **inspect and control a running Unity scene** in a structured, safe manner.
 
 Key components include:
 
-1. **Unity MCP Plugin (Server)** – A C# plugin integrated into the Unity Editor that hosts a WebSocket server
+1. **Unity MCP Plugin (Server)** – A C# plugin integrated into the Unity Editor that hosts a TCP server
 2. **FastMCP Python Client** – A Python application that implements the MCP interface for Unity
 3. **MCP Client (AI or External)** – The external entity (such as an AI assistant or testing script) that sends MCP requests
 
@@ -36,8 +36,8 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standar
 - Modify GameObject properties with AI assistance
 - List and navigate GameObject hierarchies
 - Provide contextual templates through MCP prompts
-- Real-time communication via WebSockets
-- WebSocket server hosted directly in Unity
+- Real-time communication via TCP sockets
+- TCP server hosted directly in Unity
 - Fast, efficient JSON serialization
 
 ## Getting Started
@@ -52,10 +52,10 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standar
      ```powershell
      New-Item -ItemType SymbolicLink -Target "D:\Dev\YetAnotherUnityMcp\plugin" -Path "C:\Users\azrea\My project\Assets\Plugins\YetAnotherUnityMcp"
      ```
-3. Start the WebSocket server:
-   - From the menu: MCP > WebSocket Server > Start Server
-   - Or: Window > WebSocket MCP Server > Start Server
-4. Note the WebSocket URL (default: ws://localhost:8080/)
+3. Start the TCP server:
+   - From the menu: MCP > TCP Server > Start Server
+   - Or: Window > MCP Server > Start Server
+4. Note the TCP server address (default: localhost:8080)
 
 ### Python Client Setup
 
@@ -97,19 +97,19 @@ YetAnotherUnityMcp/
 │   │   ├── tools/               # Tool implementations
 │   │   ├── resources/           # Resource implementations
 │   │   └── unity_client_util.py # Unity client utility functions
-│   ├── unity_websocket_client.py # High-level Unity WebSocket client
+│   ├── unity_tcp_client.py      # High-level Unity TCP client
 │   ├── mcp_server.py            # MCP server implementation
-│   └── websocket_client.py      # Low-level WebSocket client implementation
+│   └── websocket_client.py      # TCP client implementation (legacy name)
 ├── plugin/                      # Unity C# plugin
 │   ├── Scripts/                 # Plugin source code
 │   │   ├── Editor/              # Editor extensions
 │   │   │   ├── Commands/        # Editor command implementations
 │   │   │   ├── MCPWindow.cs     # Server control window
 │   │   │   ├── MCPMenu.cs       # Unity menu integration
-│   │   │   ├── MCPWebSocketServer.cs # High-level server implementation
+│   │   │   ├── MCPTcpServer.cs  # High-level server implementation
 │   │   │   ├── CommandExecutionMonitor.cs # Performance monitoring
 │   │   │   ├── Models/          # Data models for Editor
-│   │   │   └── WebSocket/       # WebSocket server implementation
+│   │   │   └── Net/             # TCP server implementation
 │   │   └── YetAnotherUnityMcp.asmdef  # Assembly definition
 │   └── README.md                # Plugin documentation
 └── tests/                       # Test suite
@@ -117,20 +117,22 @@ YetAnotherUnityMcp/
 
 ## Architecture
 
-### Unity WebSocket Server
+### Unity TCP Server
 
-The Unity plugin hosts a WebSocket server that listens for connections from MCP clients. This server:
+The Unity plugin hosts a TCP server that listens for connections from MCP clients. This server:
 
-- Manages client connections and message routing
+- Manages client connections and message routing with a simple framing protocol
+- Supports handshake and ping/pong for connection health monitoring
 - Executes commands sent by clients (e.g., running C# code, taking screenshots)
 - Returns results back to clients
 - Provides a UI for monitoring connections and debugging
 
 ### Python MCP Client
 
-The Python client connects to the Unity WebSocket server and provides an MCP interface for AI tools. It:
+The Python client connects to the Unity TCP server and provides an MCP interface for AI tools. It:
 
-- Translates MCP requests into WebSocket messages for Unity
+- Translates MCP requests into framed TCP messages for Unity
+- Handles connection retries and keep-alive pings
 - Converts Unity responses into MCP resource data
 - Uses FastMCP's lifespan management for connection lifecycle
 - Provides standardized error handling and reconnection logic
@@ -155,9 +157,15 @@ The Python client connects to the Unity WebSocket server and provides an MCP int
 
 ## Communication Protocol
 
-All communication between the Unity server and the Python client uses a **WebSocket** connection, which allows persistent, low-latency bidirectional messaging. The connection is initiated by the Python client to the Unity server's WebSocket endpoint (e.g. `ws://localhost:8080/`).
+All communication between the Unity server and the Python client uses a **TCP socket** connection with a simple framing protocol, which allows persistent, low-latency bidirectional messaging. The connection is initiated by the Python client to the Unity server's TCP endpoint (e.g. `localhost:8080`).
 
-Every message is a JSON object containing at least a **command or response type**, a **unique ID** (to pair requests with responses), and a **parameters or result object**. For more details on the communication protocol, see the [Technical Details](TECH_DETAILS.md) document.
+The protocol uses a simple framing mechanism:
+- Start marker (STX, 0x02)
+- 4-byte length prefix
+- JSON message content
+- End marker (ETX, 0x03)
+
+Every message is a JSON object containing at least a **command or response type**, a **unique ID** (to pair requests with responses), and a **parameters or result object**. The connection is maintained with periodic ping/pong messages. For more details on the communication protocol, see the [Technical Details](TECH_DETAILS.md) document.
 
 ## Development
 

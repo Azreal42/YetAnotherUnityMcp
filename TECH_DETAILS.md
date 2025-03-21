@@ -35,13 +35,37 @@ The client can run in two modes:
 - **MCP mode**: Using FastMCP's built-in server with STDIO transport (via `fastmcp run` or an MCP-enabled FastAPI app).
 - **Direct mode**: A direct WebSocket client connection to Unity for testing and development.
 
-## Communication Protocol (WebSockets & JSON)
+## Communication Protocol (TCP & JSON)
 
-All communication between the Unity server and the Python client uses a **WebSocket** connection, which allows persistent, low-latency bidirectional messaging. This avoids constant polling and enables real-time communication between Unity and Python.
+All communication between the Unity server and the Python client uses a **TCP socket** connection with a simple framing protocol. This provides persistent, low-latency bidirectional messaging while avoiding WebSocket compatibility issues that can occur in Unity's .NET/Mono implementation.
+
+### Message Framing Protocol
+
+Messages are framed with a simple binary protocol:
+- `STX` (Start of Text, 0x02) - marks the beginning of a message
+- 4-byte little-endian message length
+- Message content (UTF-8 encoded JSON)
+- `ETX` (End of Text, 0x03) - marks the end of a message
+
+This framing allows reliable message boundary detection without relying on WebSockets.
+
+### Connection Establishment
+
+1. Client connects to the TCP server
+2. Client sends `YAUM_HANDSHAKE_REQUEST` as plain text  
+3. Server responds with `YAUM_HANDSHAKE_RESPONSE` as plain text
+4. Connection is now ready for framed message exchange
+
+### Keep-Alive Mechanism
+
+To maintain connection health:
+- Client sends a `PING` message every 30 seconds
+- Server responds with a `PONG` message
+- If no response is received, the client attempts to reconnect
 
 ### Message Format
 
-Every message is a JSON object containing at least a **command or response type**, a **unique ID** (to pair requests with responses), and **parameters or result object**. We define two primary message types:
+Within the framing protocol, every message is a JSON object containing at least a **command or response type**, a **unique ID** (to pair requests with responses), and **parameters or result object**. We define two primary message types:
 
 #### Command Request
 
@@ -122,18 +146,20 @@ By default, the system defines a set of commands that the Unity server will reco
 - `get_unity_info`: Get information about the Unity environment.
 - `get_schema`: Retrieve information about all available tools and resources.
 
-## WebSocket Implementation Details
+## TCP Socket Implementation Details
 
-### Unity WebSocket Server
+### Unity TCP Server
 
-The Unity WebSocket server has the following components:
+The Unity TCP server has the following components:
 
-1. **WebSocketServer**: Core server implementation that handles:
-   - Managing client connections
-   - Message routing
+1. **WebSocketServer** (renamed for backward compatibility but now uses TcpListener): Core server implementation that handles:
+   - Managing client connections via TCP sockets
+   - Message framing and routing
    - Thread-safe message queue for processing on the main thread
    - Performance monitoring
    - Error handling and logging
+   - Handshake and connection management
+   - Ping/pong protocol for connection health
 
 2. **MCPWebSocketServer**: High-level manager that provides:
    - Command processing for MCP tools
@@ -148,16 +174,17 @@ The Unity WebSocket server has the following components:
    - Message log for debugging
    - Status information
 
-### Python WebSocket Client
+### Python TCP Client
 
 The Python client implementation includes:
 
-1. **WebSocketClient**: Low-level client that handles:
-   - Connection to Unity server
-   - Message sending/receiving
+1. **WebSocketClient** (renamed for backward compatibility but now uses raw TCP sockets): Low-level client that handles:
+   - Connection to Unity server with retry mechanism
+   - Message framing, sending, and receiving
    - Request-response tracking with IDs
    - Event-based communication (connected, disconnected, message, error)
    - Async/await interface for Python
+   - Automatic reconnection and keep-alive pings
 
 2. **UnityWebSocketClient**: High-level client that provides:
    - Higher-level APIs for Unity commands (execute_code, take_screenshot, etc.)
@@ -447,29 +474,45 @@ The following diagram illustrates the components of the system and the communica
 sequenceDiagram
     participant AI as AI Client (MCP Consumer)
     participant Python as Python MCP Client
-    participant Unity as Unity Plugin (WebSocket Server)
+    participant Unity as Unity Plugin (TCP Server)
     AI->>Python: (1) MCP Tool/Resource Request (JSON over STDIO)<br/>e.g. execute_code_in_unity, unity://logs
-    Python-->>Unity: (2) Send command via WebSocket<br/>JSON message with command & parameters
-    note over Python,Unity: WebSocket connection is established by Python at startup
+    
+    rect rgb(230, 245, 255)
+        Python->>Unity: (2a) TCP Connection + Handshake Request<br/>"YAUM_HANDSHAKE_REQUEST"
+        Unity-->>Python: (2b) Handshake Response<br/>"YAUM_HANDSHAKE_RESPONSE"
+    end
+    
+    Python-->>Unity: (2c) Send command via TCP<br/>Framed JSON message with command & parameters
+    note over Python,Unity: TCP connection with custom framing protocol (STX+LENGTH+DATA+ETX)
     Unity-->>Unity: (3) Execute command in Unity (main thread)<br/>e.g. run code or gather data
-    Unity-->>Python: (4) Send Response via WebSocket<br/>JSON result or error (incl. image data if any)
+    Unity-->>Python: (4) Send Response via TCP<br/>Framed JSON result or error (incl. image data if any)
     Python-->>AI: (5) MCP Response to AI (JSON/JSON+image)<br/>Returns result or error back to caller
+    
     alt Image Data Returned
         Unity-->>Python: (4b) Response with file path to saved image<br/>(Or base64 image inside JSON)
         Python-->>AI: (5b) Respond with image object in MCP format
     end
+    
     rect rgba(200, 255, 200, 0.1)
         Note over AI: AI (e.g. Claude) uses MCP spec to ask Python for Unity info.
-        Note over Python: Python client connects to Unity WebSocket server.
-        Note over Unity: Unity plugin hosts WebSocket server to process commands.
+        Note over Python: Python client connects to Unity TCP server with retry mechanism.
+        Note over Unity: Unity plugin hosts TCP server with simple framing protocol.
+    end
+    
+    rect rgb(255, 240, 230)
+        Python->>Unity: Periodic PING (every 30s)
+        Unity-->>Python: PONG response
     end
 ```
 
 In this workflow:
 1. The AI client sends a request to the Python MCP client.
-2. The Python client sends a command to Unity via WebSocket.
+2. The Python client establishes a TCP connection with the Unity server:
+   a. Performs a handshake exchange
+   b. Sends the command as a framed JSON message
 3. Unity executes the command on the main thread.
-4. Unity sends the response back to the Python client via WebSocket.
+4. Unity sends the response back to the Python client via the TCP connection.
 5. The Python client formats the response and sends it back to the AI client.
+6. The connection is maintained with periodic ping/pong messages.
 
-This architecture ensures clean separation of concerns and allows for real-time communication between Unity and the AI client, with Unity as the central authority hosting the WebSocket server.
+This architecture ensures clean separation of concerns and allows for real-time communication between Unity and the AI client, with Unity as the central authority hosting the TCP server. The simplified TCP-based approach avoids WebSocket implementation issues in Unity's Mono runtime while maintaining the same functionality and message flow.

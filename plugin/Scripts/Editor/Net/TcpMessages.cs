@@ -3,33 +3,35 @@ using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
 
-namespace YetAnotherUnityMcp.Editor.WebSocket
+namespace YetAnotherUnityMcp.Editor.Net
 {
     /// <summary>
-    /// Interface for all WebSocket messages
+    /// Interface for all TCP messages
     /// </summary>
-    public interface IWebSocketMessage
+    public interface ITcpMessage
     {
         /// <summary>
         /// Process the message on the main thread
         /// </summary>
-        /// <param name="server">The WebSocketServer that received this message</param>
-        void Process(WebSocketServer server);
+        /// <param name="server">The TCP server that received this message</param>
+        void Process(TcpServer server);
     }
 
     /// <summary>
-    /// Regular WebSocket message with JSON content
+    /// Regular TCP message with JSON content
     /// </summary>
-    public class WebSocketJsonMessage : IWebSocketMessage
+    public class TcpJsonMessage : ITcpMessage
     {
         public string JsonContent { get; }
         public long ReceivedTimestamp { get; }
         public Dictionary<string, object> ParsedContent { get; private set; }
+        public TcpConnection Connection { get; }
         
-        public WebSocketJsonMessage(string jsonContent)
+        public TcpJsonMessage(string jsonContent)
         {
             JsonContent = jsonContent;
             ReceivedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            Connection = null;
             
             try
             {
@@ -37,12 +39,30 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[WebSocketJsonMessage] Failed to parse JSON: {ex.Message}");
+                Debug.LogWarning($"[TCP Message] Failed to parse JSON: {ex.Message}");
                 ParsedContent = new Dictionary<string, object>();
             }
         }
         
-        public void Process(WebSocketServer server)
+        // Constructor with connection info
+        public TcpJsonMessage(string jsonContent, TcpConnection connection)
+        {
+            JsonContent = jsonContent;
+            ReceivedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            Connection = connection;
+            
+            try
+            {
+                ParsedContent = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonContent);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[TCP Message] Failed to parse JSON: {ex.Message}");
+                ParsedContent = new Dictionary<string, object>();
+            }
+        }
+        
+        public void Process(TcpServer server)
         {
             // Calculate latency if client timestamp is present
             if (ParsedContent.TryGetValue("client_timestamp", out var timestampObj) && timestampObj != null)
@@ -54,7 +74,7 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
                     
                     string command = ParsedContent.TryGetValue("command", out var cmdObj) ? cmdObj?.ToString() : "unknown";
                     
-                    Debug.Log($"[WebSocket Server] Message received - Latency: {latency}ms, Command: {command}, Size: {JsonContent.Length} bytes");
+                    Debug.Log($"[TCP Server] Message received - Latency: {latency}ms, Command: {command}, Size: {JsonContent.Length} bytes");
                 }
                 catch
                 {
@@ -65,6 +85,12 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             {
                 LogMessageContent();
             }
+            
+            // Notify message received event
+            if (Connection != null)
+            {
+                server.OnMessageReceived?.Invoke(JsonContent, Connection);
+            }
         }
         
         private void LogMessageContent()
@@ -72,86 +98,87 @@ namespace YetAnotherUnityMcp.Editor.WebSocket
             // Log message content with length limit
             if (JsonContent.Length < 500)
             {
-                Debug.Log($"[WebSocket Server] Message received: {JsonContent}");
+                Debug.Log($"[TCP Server] Message received: {JsonContent}");
             }
             else
             {
-                Debug.Log($"[WebSocket Server] Message received: {JsonContent.Substring(0, 100)}... (truncated, {JsonContent.Length} bytes)");
+                Debug.Log($"[TCP Server] Message received: {JsonContent.Substring(0, 100)}... (truncated, {JsonContent.Length} bytes)");
             }
         }
     }
 
     /// <summary>
-    /// Error message for handling WebSocket errors
+    /// Error message for handling TCP errors
     /// </summary>
-    public class WebSocketErrorMessage : IWebSocketMessage
+    public class TcpErrorMessage : ITcpMessage
     {
         public string ErrorMessage { get; }
         
-        public WebSocketErrorMessage(string errorMessage)
+        public TcpErrorMessage(string errorMessage)
         {
             ErrorMessage = errorMessage;
         }
         
-        public void Process(WebSocketServer server)
+        public void Process(TcpServer server)
         {
-            Debug.LogError($"[WebSocket Server] Error: {ErrorMessage}");
+            Debug.LogError($"[TCP Server] Error: {ErrorMessage}");
+            server.OnError?.Invoke(ErrorMessage);
         }
     }
 
     /// <summary>
-    /// Disconnect message for handling WebSocket disconnections
+    /// Disconnect message for handling TCP disconnections
     /// </summary>
-    public class WebSocketDisconnectMessage : IWebSocketMessage
+    public class TcpDisconnectMessage : ITcpMessage
     {
         public string Reason { get; }
         public string ConnectionId { get; }
         
-        public WebSocketDisconnectMessage(string reason = "", string connectionId = null)
+        public TcpDisconnectMessage(string reason = "", string connectionId = null)
         {
             Reason = reason;
             ConnectionId = connectionId;
         }
         
-        public void Process(WebSocketServer server)
+        public void Process(TcpServer server)
         {
             if (!string.IsNullOrEmpty(Reason))
             {
-                Debug.Log($"[WebSocket Server] Disconnected: {Reason}");
+                Debug.Log($"[TCP Server] Disconnected: {Reason}");
             }
             else
             {
-                Debug.Log("[WebSocket Server] Disconnected");
+                Debug.Log("[TCP Server] Disconnected");
             }
         }
     }
 
     /// <summary>
-    /// Status update message for logging internal WebSocket server status
+    /// Status update message for logging internal TCP server status
     /// </summary>
-    public class WebSocketStatusMessage : IWebSocketMessage
+    public class TcpStatusMessage : ITcpMessage
     {
         public string Status { get; }
         public LogType LogLevel { get; }
         
-        public WebSocketStatusMessage(string status, LogType logLevel = LogType.Log)
+        public TcpStatusMessage(string status, LogType logLevel = LogType.Log)
         {
             Status = status;
             LogLevel = logLevel;
         }
         
-        public void Process(WebSocketServer server)
+        public void Process(TcpServer server)
         {
             switch (LogLevel)
             {
                 case LogType.Error:
-                    Debug.LogError($"[WebSocket Server] {Status}");
+                    Debug.LogError($"[TCP Server] {Status}");
                     break;
                 case LogType.Warning:
-                    Debug.LogWarning($"[WebSocket Server] {Status}");
+                    Debug.LogWarning($"[TCP Server] {Status}");
                     break;
                 default:
-                    Debug.Log($"[WebSocket Server] {Status}");
+                    Debug.Log($"[TCP Server] {Status}");
                     break;
             }
         }

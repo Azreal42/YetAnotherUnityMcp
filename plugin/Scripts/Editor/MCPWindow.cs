@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using YetAnotherUnityMcp.Editor.Commands;
-using YetAnotherUnityMcp.Editor.WebSocket;
+using YetAnotherUnityMcp.Editor.Net;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using System.Collections.Generic;
 namespace YetAnotherUnityMcp.Editor
 {
     /// <summary>
-    /// Static initializer for MCP WebSocket Server
+    /// Static initializer for MCP TCP Server
     /// </summary>
     [InitializeOnLoad]
     public static class MCPServerInitializer
@@ -35,12 +35,12 @@ namespace YetAnotherUnityMcp.Editor
             // Set up automatic server cleanup when editor is shutting down
             EditorApplication.quitting += () => 
             {
-                Debug.Log("[MCP Server] Unity Editor shutting down, stopping WebSocket server...");
-                _ = WebSocket.MCPWebSocketServer.Instance.StopAsync();
+                Debug.Log("[MCP Server] Unity Editor shutting down, stopping TCP server...");
+                _ = MCPTcpServer.Instance.StopAsync();
             };
             
             // Log initialization
-            Debug.Log("[MCP Server] MCP WebSocket Server module initialized");
+            Debug.Log("[MCP Server] MCP TCP Server module initialized");
             
             // Auto-start server on editor startup (if enabled)
             EditorApplication.delayCall += () => {
@@ -57,30 +57,30 @@ namespace YetAnotherUnityMcp.Editor
         }
         
         /// <summary>
-        /// Automatically start the WebSocket server
+        /// Automatically start the TCP server
         /// </summary>
         private static async void AutoStartServer()
         {
             try
             {
-                if (!WebSocket.MCPWebSocketServer.Instance.IsRunning)
+                if (!MCPTcpServer.Instance.IsRunning)
                 {
-                    Debug.Log("[MCP Server] Auto-starting WebSocket server...");
-                    bool success = await WebSocket.MCPWebSocketServer.Instance.StartAsync();
+                    Debug.Log("[MCP Server] Auto-starting TCP server...");
+                    bool success = await MCPTcpServer.Instance.StartAsync();
                     
                     if (success)
                     {
-                        Debug.Log($"[MCP Server] WebSocket server auto-started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}");
+                        Debug.Log($"[MCP Server] TCP server auto-started on {MCPTcpServer.Instance.ServerUrl}");
                     }
                     else
                     {
-                        Debug.LogWarning("[MCP Server] Failed to auto-start WebSocket server");
+                        Debug.LogWarning("[MCP Server] Failed to auto-start TCP server");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MCP Server] Error auto-starting WebSocket server: {ex.Message}");
+                Debug.LogError($"[MCP Server] Error auto-starting TCP server: {ex.Message}");
             }
         }
     }
@@ -119,21 +119,21 @@ namespace YetAnotherUnityMcp.Editor
         private void OnEnable()
         {
             // Subscribe to server events
-            WebSocket.MCPWebSocketServer.Instance.OnServerStarted += HandleServerStarted;
-            WebSocket.MCPWebSocketServer.Instance.OnServerStopped += HandleServerStopped;
-            WebSocket.MCPWebSocketServer.Instance.OnClientConnected += HandleClientConnected;
-            WebSocket.MCPWebSocketServer.Instance.OnClientDisconnected += HandleClientDisconnected;
-            WebSocket.MCPWebSocketServer.Instance.OnError += HandleError;
+            MCPTcpServer.Instance.OnServerStarted += HandleServerStarted;
+            MCPTcpServer.Instance.OnServerStopped += HandleServerStopped;
+            MCPTcpServer.Instance.OnClientConnected += HandleClientConnected;
+            MCPTcpServer.Instance.OnClientDisconnected += HandleClientDisconnected;
+            MCPTcpServer.Instance.OnError += HandleError;
         }
 
         private void OnDisable()
         {
             // Unsubscribe from server events to prevent memory leaks
-            WebSocket.MCPWebSocketServer.Instance.OnServerStarted -= HandleServerStarted;
-            WebSocket.MCPWebSocketServer.Instance.OnServerStopped -= HandleServerStopped;
-            WebSocket.MCPWebSocketServer.Instance.OnClientConnected -= HandleClientConnected;
-            WebSocket.MCPWebSocketServer.Instance.OnClientDisconnected -= HandleClientDisconnected;
-            WebSocket.MCPWebSocketServer.Instance.OnError -= HandleError;
+            MCPTcpServer.Instance.OnServerStarted -= HandleServerStarted;
+            MCPTcpServer.Instance.OnServerStopped -= HandleServerStopped;
+            MCPTcpServer.Instance.OnClientConnected -= HandleClientConnected;
+            MCPTcpServer.Instance.OnClientDisconnected -= HandleClientDisconnected;
+            MCPTcpServer.Instance.OnError -= HandleError;
         }
 
         private void OnGUI()
@@ -141,12 +141,12 @@ namespace YetAnotherUnityMcp.Editor
             EditorGUILayout.LabelField("Unity MCP Server", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            bool isRunning = WebSocket.MCPWebSocketServer.Instance.IsRunning;
+            bool isRunning = MCPTcpServer.Instance.IsRunning;
 
             // Server status and controls
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Server Status:", isRunning ? 
-                $"Running on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}" : 
+                $"Running on {MCPTcpServer.Instance.ServerUrl}" : 
                 "Stopped");
             
             if (GUILayout.Button(isRunning ? "Stop Server" : "Start Server"))
@@ -297,10 +297,10 @@ namespace YetAnotherUnityMcp.Editor
             
             try
             {
-                bool success = await WebSocket.MCPWebSocketServer.Instance.StartAsync(hostname, port);
+                bool success = await MCPTcpServer.Instance.StartAsync(hostname, port);
                 if (success)
                 {
-                    lastResponse = $"Server started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}";
+                    lastResponse = $"Server started on {MCPTcpServer.Instance.ServerUrl}";
                 }
                 else
                 {
@@ -323,7 +323,7 @@ namespace YetAnotherUnityMcp.Editor
             
             try
             {
-                await WebSocket.MCPWebSocketServer.Instance.StopAsync();
+                await MCPTcpServer.Instance.StopAsync();
                 lastResponse = "Server stopped";
                 connectedClients.Clear();
             }
@@ -342,7 +342,7 @@ namespace YetAnotherUnityMcp.Editor
         
         private void HandleServerStarted()
         {
-            lastResponse = $"Server started on {WebSocket.MCPWebSocketServer.Instance.ServerUrl}";
+            lastResponse = $"Server started on {MCPTcpServer.Instance.ServerUrl}";
             Repaint();
         }
         

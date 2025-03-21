@@ -1,5 +1,5 @@
 """
-WebSocket client for connecting to Unity WebSocket server.
+TCP client for connecting to Unity TCP server.
 Provides asynchronous communication with Unity.
 """
 
@@ -7,26 +7,38 @@ import json
 import logging
 import uuid
 import asyncio
-import websockets
+import struct
+import socket
 import time
 from typing import Dict, Any, Optional, List, Union, Callable
 
 logger = logging.getLogger("mcp_client")
 
+# Protocol constants
+START_MARKER = 0x02  # STX (Start of Text)
+END_MARKER = 0x03    # ETX (End of Text)
+PING_MESSAGE = "PING"
+PONG_RESPONSE = "PONG"
+HANDSHAKE_REQUEST = "YAUM_HANDSHAKE_REQUEST"
+HANDSHAKE_RESPONSE = "YAUM_HANDSHAKE_RESPONSE"
+RECONNECT_DELAY = 2  # seconds
+
 class WebSocketClient:
     """
-    WebSocket client for connecting to the Unity MCP WebSocket server.
+    TCP client for connecting to the Unity MCP TCP server.
+    Named WebSocketClient for backward compatibility.
     """
     
-    def __init__(self, url: str = "ws://localhost:8080/"):
+    def __init__(self, url: str = "tcp://localhost:8080/"):
         """
-        Initialize the WebSocket client.
+        Initialize the TCP client.
         
         Args:
-            url: WebSocket server URL
+            url: TCP server URL (tcp://host:port/)
         """
         self.url = url
-        self.websocket = None
+        self.reader = None
+        self.writer = None
         self.connected = False
         self.pending_requests: Dict[str, asyncio.Future] = {}
         self.receive_task = None
@@ -37,58 +49,107 @@ class WebSocketClient:
             "error": []
         }
         
-    async def connect(self) -> bool:
+        # Extract host and port from URL
+        if url.startswith("ws://"):
+            # Support old WebSocket URLs for backward compatibility
+            self.host = url.replace("ws://", "").split("/")[0].split(":")[0]
+            port_str = url.replace("ws://", "").split("/")[0].split(":")
+            self.port = int(port_str[1]) if len(port_str) > 1 else 8080
+        elif url.startswith("tcp://"):
+            self.host = url.replace("tcp://", "").split("/")[0].split(":")[0]
+            port_str = url.replace("tcp://", "").split("/")[0].split(":")
+            self.port = int(port_str[1]) if len(port_str) > 1 else 8080
+        else:
+            # Assume basic host:port format
+            parts = url.split(":")
+            self.host = parts[0]
+            self.port = int(parts[1]) if len(parts) > 1 else 8080
+            
+    async def connect(self, max_attempts: int = 5) -> bool:
         """
-        Connect to the Unity WebSocket server.
+        Connect to the Unity TCP server with retry mechanism.
         
+        Args:
+            max_attempts: Maximum number of connection attempts
+            
         Returns:
             True if connected successfully, False otherwise
         """
         if self.connected:
-            logger.warning("Already connected to Unity WebSocket server")
+            logger.warning("Already connected to Unity TCP server")
             return True
-            
-        try:
-            logger.info(f"Connecting to Unity WebSocket server at {self.url}")
-            self.websocket = await websockets.connect(self.url)
-            self.connected = True
-            logger.info("Connected to Unity WebSocket server")
-            
-            # Start the message receive loop
-            self.receive_task = asyncio.create_task(self._receive_messages())
-            
-            # Trigger connected callbacks
-            await self._trigger_callbacks("connected")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error connecting to Unity WebSocket server: {str(e)}")
-            await self._trigger_callbacks("error", f"Connection error: {str(e)}")
-            return False
+        
+        attempts = 0
+        connected = False
+        last_error = None
+        
+        while attempts < max_attempts and not connected:
+            attempts += 1
+            try:
+                logger.info(f"Connecting to Unity TCP server at {self.host}:{self.port} (attempt {attempts}/{max_attempts})")
+                
+                # Create a TCP connection
+                self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+                
+                # Perform handshake
+                if await self._perform_handshake():
+                    self.connected = True
+                    connected = True
+                    logger.info("Connected to Unity TCP server")
+                    
+                    # Start the message receive loop
+                    self.receive_task = asyncio.create_task(self._receive_messages())
+                    
+                    # Trigger connected callbacks
+                    await self._trigger_callbacks("connected")
+                    
+                    return True
+                else:
+                    logger.error("Handshake failed")
+                    # Close connection and retry
+                    self.writer.close()
+                    await self.writer.wait_closed()
+                    self.reader = None
+                    self.writer = None
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"Error connecting to Unity TCP server: {last_error}")
+                
+                # Wait before retrying
+                if attempts < max_attempts:
+                    wait_time = RECONNECT_DELAY * attempts  # Progressive backoff
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+        
+        # All attempts failed
+        await self._trigger_callbacks("error", f"Connection error: {last_error}")
+        return False
             
     async def disconnect(self) -> None:
         """
-        Disconnect from the Unity WebSocket server.
+        Disconnect from the Unity TCP server.
         """
         if not self.connected:
-            logger.warning("Not connected to Unity WebSocket server")
+            logger.warning("Not connected to Unity TCP server")
             return
             
         try:
-            logger.info("Disconnecting from Unity WebSocket server")
+            logger.info("Disconnecting from Unity TCP server")
             
             # Cancel the receive task
             if self.receive_task:
                 self.receive_task.cancel()
                 self.receive_task = None
                 
-            # Close the WebSocket connection
-            if self.websocket:
-                await self.websocket.close()
-                self.websocket = None
+            # Close the TCP connection
+            if self.writer:
+                self.writer.close()
+                await self.writer.wait_closed()
+                self.writer = None
+                self.reader = None
                 
             self.connected = False
-            logger.info("Disconnected from Unity WebSocket server")
+            logger.info("Disconnected from Unity TCP server")
             
             # Trigger disconnected callbacks
             await self._trigger_callbacks("disconnected")
@@ -99,8 +160,106 @@ class WebSocketClient:
                     future.set_exception(Exception("Disconnected from server"))
             self.pending_requests.clear()
         except Exception as e:
-            logger.error(f"Error disconnecting from Unity WebSocket server: {str(e)}")
+            logger.error(f"Error disconnecting from Unity TCP server: {str(e)}")
             await self._trigger_callbacks("error", f"Disconnection error: {str(e)}")
+    
+    async def _perform_handshake(self) -> bool:
+        """
+        Perform handshake with the TCP server.
+        
+        Returns:
+            True if handshake was successful, False otherwise
+        """
+        try:
+            # Send handshake request
+            self.writer.write(HANDSHAKE_REQUEST.encode('utf-8'))
+            await self.writer.drain()
+            
+            # Read handshake response with timeout
+            response_bytes = await asyncio.wait_for(self.reader.read(1024), timeout=5.0)
+            response = response_bytes.decode('utf-8')
+            
+            if response == HANDSHAKE_RESPONSE:
+                logger.info("Handshake successful")
+                return True
+            else:
+                logger.error(f"Invalid handshake response: {response}")
+                return False
+        except asyncio.TimeoutError:
+            logger.error("Handshake timeout")
+            return False
+        except Exception as e:
+            logger.error(f"Handshake error: {str(e)}")
+            return False
+    
+    async def _send_frame(self, message: str) -> None:
+        """
+        Send a framed message to the TCP server.
+        
+        Args:
+            message: Message to send
+        """
+        if not self.connected or not self.writer:
+            raise Exception("Not connected to Unity TCP server")
+        
+        # Convert message to bytes
+        message_bytes = message.encode('utf-8')
+        
+        # Create frame: STX + [LENGTH:4] + [MESSAGE] + ETX
+        frame = bytearray()
+        frame.append(START_MARKER)
+        frame.extend(struct.pack("<I", len(message_bytes)))  # Length as 4-byte little-endian
+        frame.extend(message_bytes)
+        frame.append(END_MARKER)
+        
+        # Send the frame
+        self.writer.write(frame)
+        await self.writer.drain()
+    
+    async def _receive_frame(self) -> Optional[str]:
+        """
+        Receive a framed message from the TCP server.
+        
+        Returns:
+            Received message as string, or None if connection closed
+        """
+        if not self.connected or not self.reader:
+            raise Exception("Not connected to Unity TCP server")
+        
+        try:
+            # Read until start marker (STX)
+            while True:
+                b = await self.reader.readexactly(1)
+                if b[0] == START_MARKER:
+                    break
+                
+            # Read message length (4 bytes)
+            length_bytes = await self.reader.readexactly(4)
+            message_length = struct.unpack("<I", length_bytes)[0]
+            
+            # Sanity check for message length
+            if message_length <= 0 or message_length > 10 * 1024 * 1024:  # Max 10 MB
+                logger.error(f"Invalid message length: {message_length}")
+                return None
+            
+            # Read message data
+            message_bytes = await self.reader.readexactly(message_length)
+            
+            # Read end marker (ETX)
+            end_marker = await self.reader.readexactly(1)
+            if end_marker[0] != END_MARKER:
+                logger.error(f"Missing end marker, got: {end_marker[0]}")
+                return None
+            
+            # Convert to string
+            return message_bytes.decode('utf-8')
+            
+        except asyncio.IncompleteReadError:
+            # Connection closed
+            return None
+        except Exception as e:
+            logger.error(f"Error receiving frame: {str(e)}")
+            return None
     
     async def execute_code(self, code: str) -> Any:
         """
@@ -177,7 +336,7 @@ class WebSocketClient:
     
     async def send_command(self, command: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """
-        Send a command to the Unity WebSocket server.
+        Send a command to the Unity TCP server.
         
         Args:
             command: Command to execute
@@ -187,7 +346,7 @@ class WebSocketClient:
             Command result
         """
         if not self.connected:
-            raise Exception("Not connected to Unity WebSocket server")
+            raise Exception("Not connected to Unity TCP server")
             
         # Generate a unique request ID
         request_id = f"req_{uuid.uuid4().hex}"
@@ -208,7 +367,7 @@ class WebSocketClient:
             
         # Send the request
         try:
-            await self.websocket.send(json.dumps(request))
+            await self._send_frame(json.dumps(request))
             logger.debug(f"Sent request {request_id}: {command}")
             
             # Wait for the response with a timeout
@@ -232,41 +391,74 @@ class WebSocketClient:
     
     async def _receive_messages(self) -> None:
         """
-        Receive and process messages from the Unity WebSocket server.
+        Receive and process messages from the Unity TCP server.
         """
-        if not self.websocket:
-            logger.error("WebSocket not connected")
+        if not self.connected:
+            logger.error("TCP not connected")
             return
+        
+        # Send a ping every 30 seconds
+        ping_interval = 30
+        last_ping_time = time.time()
             
         try:
-            async for message in self.websocket:
+            while self.connected:
+                # Check if it's time to send a ping
+                current_time = time.time()
+                if current_time - last_ping_time >= ping_interval:
+                    try:
+                        await self._send_frame(PING_MESSAGE)
+                        last_ping_time = current_time
+                    except Exception as e:
+                        logger.error(f"Error sending ping: {str(e)}")
+                        break  # Connection likely broken
+                
+                # Try to read with a short timeout
                 try:
-                    # Parse the message
-                    data = json.loads(message)
+                    # Use wait_for with a short timeout to allow for ping checks
+                    message = await asyncio.wait_for(self._receive_frame(), timeout=1.0)
                     
-                    # Log the message (truncated if large)
-                    message_str = message
-                    if len(message_str) > 500:
-                        message_str = message_str[:500] + "... (truncated)"
-                    logger.debug(f"Received message: {message_str}")
+                    # Check if connection closed
+                    if message is None:
+                        logger.error("Connection closed by server")
+                        break
                     
-                    # Trigger message callbacks
-                    await self._trigger_callbacks("message", data)
+                    # Handle special messages
+                    if message == PONG_RESPONSE:
+                        logger.debug("Received PONG")
+                        continue
                     
-                    # Check if this is a response to a pending request
-                    request_id = data.get("id")
-                    if request_id in self.pending_requests:
-                        future = self.pending_requests.pop(request_id)
-                        if not future.done():
-                            future.set_result(data)
-                except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON received: {message}")
-                except Exception as e:
-                    logger.exception(f"Error processing message: {str(e)}")
+                    try:
+                        # Parse the message
+                        data = json.loads(message)
+                        
+                        # Log the message (truncated if large)
+                        message_str = message
+                        if len(message_str) > 500:
+                            message_str = message_str[:500] + "... (truncated)"
+                        logger.debug(f"Received message: {message_str}")
+                        
+                        # Trigger message callbacks
+                        await self._trigger_callbacks("message", data)
+                        
+                        # Check if this is a response to a pending request
+                        request_id = data.get("id")
+                        if request_id in self.pending_requests:
+                            future = self.pending_requests.pop(request_id)
+                            if not future.done():
+                                future.set_result(data)
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON received: {message}")
+                    except Exception as e:
+                        logger.exception(f"Error processing message: {str(e)}")
+                except asyncio.TimeoutError:
+                    # This is expected - just continue to next iteration
+                    continue
+                
         except asyncio.CancelledError:
-            logger.info("WebSocket receive task cancelled")
+            logger.info("TCP receive task cancelled")
         except Exception as e:
-            logger.error(f"WebSocket receive error: {str(e)}")
+            logger.error(f"TCP receive error: {str(e)}")
             await self._trigger_callbacks("error", f"Receive error: {str(e)}")
             
             # Close the connection on error
