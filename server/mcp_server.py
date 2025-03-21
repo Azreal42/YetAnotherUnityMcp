@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 # Import components
-from server.mcp.dynamic_tools import DynamicToolManager
+from server.dynamic_tools import DynamicToolManager
 from server.unity_websocket_client import UnityWebSocketClient, get_client
 
 # Configure logging
@@ -37,7 +37,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     logger.info("Server starting: initializing Unity WebSocket client...")
     
     try:
-        from server.mcp.dynamic_tools import get_manager
+        from server.dynamic_tools import get_manager
         from server.connection_manager import get_unity_connection_manager
 
         # Get the connection manager

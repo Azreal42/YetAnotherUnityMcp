@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any, Callable, TypeVar, Awaitable, Optional, cast
-from fastmcp import Context
+from mcp.server.fastmcp import Context
 from server.unity_websocket_client import get_client, UnityWebSocketClient
 from server.connection_manager import get_unity_connection_manager
 
