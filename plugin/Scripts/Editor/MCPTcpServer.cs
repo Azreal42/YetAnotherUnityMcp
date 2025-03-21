@@ -254,10 +254,23 @@ namespace YetAnotherUnityMcp.Editor
         {
             // Extract parameters
             Dictionary<string, object> parameters = null;
-            if (request.TryGetValue("parameters", out object paramsObj) && 
-                paramsObj is Dictionary<string, object> paramsDict)
+            if (request.TryGetValue("parameters", out object paramsObj))
             {
-                parameters = paramsDict;
+                if (paramsObj is Dictionary<string, object> paramsDict)
+                {
+                    parameters = paramsDict;
+                }
+                else if (paramsObj is Newtonsoft.Json.Linq.JObject jObject)
+                {
+                    // Convert JObject to Dictionary<string, object>
+                    parameters = jObject.ToObject<Dictionary<string, object>>();
+                    Debug.Log($"[MCP TCP Server] Converted JObject parameters to Dictionary");
+                }
+                else
+                {
+                    parameters = new Dictionary<string, object>();
+                    Debug.LogError($"[MCP TCP Server] Invalid parameters type: {paramsObj.GetType()}");
+                }
             }
             
             // Execute the command
@@ -276,61 +289,44 @@ namespace YetAnotherUnityMcp.Editor
                     // Process different commands
                     switch (command)
                     {
-                        case "execute_code":
-                            if (parameters?.TryGetValue("code", out object codeObj) == true && codeObj is string code)
-                            {
-                                result = ExecuteCodeCommand.Execute(code);
-                            }
-                            else
-                            {
-                                error = "Missing or invalid 'code' parameter";
-                            }
-                            break;
-                            
-                        case "take_screenshot":
-                            string outputPath = parameters?.TryGetValue("output_path", out object pathObj) == true ? pathObj.ToString() : "screenshot.png";
-                            int width = parameters?.TryGetValue("width", out object widthObj) == true ? Convert.ToInt32(widthObj) : 1920;
-                            int height = parameters?.TryGetValue("height", out object heightObj) == true ? Convert.ToInt32(heightObj) : 1080;
-                            
-                            result = TakeScreenshotCommand.Execute(outputPath, width, height);
-                            break;
-                            
-                        case "modify_object":
-                            if (parameters?.TryGetValue("object_id", out object objIdObj) == true && objIdObj is string objectId &&
-                                parameters?.TryGetValue("property_path", out object propPathObj) == true && propPathObj is string propertyPath)
-                            {
-                                object propertyValue = parameters?.TryGetValue("property_value", out object propValueObj) == true ? propValueObj : null;
-                                result = ModifyObjectCommand.Execute(objectId, propertyPath, propertyValue);
-                            }
-                            else
-                            {
-                                error = "Missing or invalid parameters for modify_object";
-                            }
-                            break;
-                            
-                        case "get_logs":
-                            int maxLogs = parameters?.TryGetValue("max_logs", out object maxLogsObj) == true ? Convert.ToInt32(maxLogsObj) : 100;
-                            result = GetLogsCommand.Execute(maxLogs);
-                            break;
-                            
-                        case "get_unity_info":
-                            result = GetUnityInfoCommand.Execute();
-                            break;
-                            
+                        
                         case "get_schema":
                             result = GetSchemaCommand.Execute();
                             break;
                             
                         case "access_resource":
+                            Debug.Log($"[MCP TCP Server] Accessing resource with parameters: {JsonConvert.SerializeObject(parameters)}");
+
                             // Invoke a resource using the ResourceInvoker
                             if (parameters?.TryGetValue("resource_name", out object resourceNameObj) == true && 
                                 resourceNameObj is string resourceName)
                             {
+                                Debug.Log($"[MCP TCP Server] Resource name: {resourceName}");
                                 // Get the resource parameters
-                                Dictionary<string, object> resourceParams = parameters?.TryGetValue("parameters", out object resourceParamsObj) == true &&
-                                                                           resourceParamsObj is Dictionary<string, object> paramsDict
-                                                                           ? paramsDict
-                                                                           : new Dictionary<string, object>();
+                                Dictionary<string, object> resourceParams = null;
+                                
+                                if (parameters?.TryGetValue("parameters", out object resourceParamsObj) == true)
+                                {
+                                    if (resourceParamsObj is Dictionary<string, object> resourceParamsDict)
+                                    {
+                                        resourceParams = resourceParamsDict;
+                                    }
+                                    else if (resourceParamsObj is Newtonsoft.Json.Linq.JObject jObject)
+                                    {
+                                        // Convert JObject to Dictionary<string, object>
+                                        resourceParams = jObject.ToObject<Dictionary<string, object>>();
+                                        Debug.Log($"[MCP TCP Server] Converted JObject resource parameters to Dictionary");
+                                    }
+                                    else
+                                    {
+                                        Debug.LogError($"[MCP TCP Server] Invalid resource parameters type: {resourceParamsObj.GetType()}");
+                                        resourceParams = new Dictionary<string, object>();
+                                    }
+                                }
+                                else
+                                {
+                                    resourceParams = new Dictionary<string, object>();
+                                }
                                 
                                 try
                                 {

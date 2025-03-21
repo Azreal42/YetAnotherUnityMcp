@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Newtonsoft.Json;
@@ -72,7 +73,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <param name="parameters">Parameter dictionary</param>
         /// <returns>Mapped parameter array</returns>
         /// <exception cref="ArgumentException">Thrown if required parameter is missing or parameter cannot be converted</exception>
-        private static object[] MapParameters(ParameterInfo[] methodParams, Dictionary<string, object> parameters)
+        internal static object[] MapParameters(ParameterInfo[] methodParams, Dictionary<string, object> parameters)
         {
             var args = new object[methodParams.Length];
             
@@ -83,8 +84,31 @@ namespace YetAnotherUnityMcp.Editor.Models
                 
                 if (parameters.TryGetValue(paramName, out object paramValue))
                 {
+                    // Handle JObject conversion first
+                    if (paramValue is Newtonsoft.Json.Linq.JObject jObject)
+                    {
+                        // If we need a dictionary, convert JObject to dictionary
+                        if (paramInfo.ParameterType == typeof(Dictionary<string, object>))
+                        {
+                            args[i] = jObject.ToObject<Dictionary<string, object>>();
+                            Debug.Log($"Converted JObject parameter {paramName} to Dictionary<string, object>");
+                        }
+                        else
+                        {
+                            // Otherwise try to convert to the target type
+                            try
+                            {
+                                args[i] = jObject.ToObject(paramInfo.ParameterType);
+                                Debug.Log($"Converted JObject parameter {paramName} to {paramInfo.ParameterType.Name}");
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new ArgumentException($"Cannot convert JObject parameter {paramName} to type {paramInfo.ParameterType.Name}: {ex.Message}");
+                            }
+                        }
+                    }
                     // Convert parameter value if needed
-                    if (paramValue != null && paramInfo.ParameterType != paramValue.GetType())
+                    else if (paramValue != null && paramInfo.ParameterType != paramValue.GetType())
                     {
                         try
                         {

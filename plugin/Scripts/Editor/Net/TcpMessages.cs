@@ -74,7 +74,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                     
                     string command = ParsedContent.TryGetValue("command", out var cmdObj) ? cmdObj?.ToString() : "unknown";
                     
-                    Debug.Log($"[TCP Server] Message received - Latency: {latency}ms, Command: {command}, Size: {JsonContent.Length} bytes");
+                    Debug.Log($"[TCP Server] Message received - Latency: {latency}ms, Command: {command}, Payload: {JsonContent} Size: {JsonContent.Length} bytes");
                 }
                 catch
                 {

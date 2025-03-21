@@ -68,67 +68,6 @@ class UnitySocketClient:
         """
         await self.tcp_client.disconnect()
     
-    async def execute_code(self, code: str) -> Any:
-        """
-        Execute C# code in Unity.
-        
-        Args:
-            code: C# code to execute
-            
-        Returns:
-            Result of the code execution
-        """
-        return await self.tcp_client.execute_code(code)
-    
-    async def take_screenshot(self, output_path: str, width: int = 1920, height: int = 1080) -> Any:
-        """
-        Take a screenshot in Unity.
-        
-        Args:
-            output_path: Path to save the screenshot
-            width: Width of the screenshot
-            height: Height of the screenshot
-            
-        Returns:
-            Result of the screenshot operation
-        """
-        return await self.tcp_client.take_screenshot(output_path, width, height)
-    
-    async def modify_object(self, object_id: str, property_path: str, property_value: Any) -> Any:
-        """
-        Modify a property of a Unity object.
-        
-        Args:
-            object_id: ID of the object to modify
-            property_path: Path to the property to modify
-            property_value: New value for the property
-            
-        Returns:
-            Result of the modification
-        """
-        return await self.tcp_client.modify_object(object_id, property_path, property_value)
-    
-    async def get_logs(self, max_logs: int = 100) -> Any:
-        """
-        Get logs from Unity.
-        
-        Args:
-            max_logs: Maximum number of logs to retrieve
-            
-        Returns:
-            Unity logs
-        """
-        return await self.tcp_client.get_logs(max_logs)
-    
-    async def get_unity_info(self) -> Any:
-        """
-        Get information about the Unity environment.
-        
-        Returns:
-            Unity environment information
-        """
-        return await self.tcp_client.get_unity_info()
-        
     async def get_schema(self) -> Any:
         """
         Get information about available tools and resources in Unity.
@@ -138,6 +77,7 @@ class UnitySocketClient:
         """
         return await self.tcp_client.get_schema()
         
+
     async def has_command(self, command_name: str) -> bool:
         """
         Check if a command exists in the Unity schema.

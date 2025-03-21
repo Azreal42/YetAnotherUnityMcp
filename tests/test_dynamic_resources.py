@@ -6,7 +6,7 @@ import sys
 import json
 from mcp.server.fastmcp import FastMCP, Context
 from server.dynamic_tool_invoker import invoke_dynamic_resource, invoke_dynamic_tool
-from server.dynamic_tools import DynamicToolManager, ResourceContext, get_manager
+from server.dynamic_tools import DynamicToolManager, get_manager
 from server.unity_socket_client import get_client
 
 # Configure logging

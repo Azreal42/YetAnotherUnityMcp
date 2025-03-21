@@ -176,6 +176,7 @@ class DynamicToolManager:
             try:
                 # Log access
                 await current_ctx.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
+                logger.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
                 
                 # Execute the command via our utility
                 # Map the resource name to the appropriate command
@@ -184,10 +185,7 @@ class DynamicToolManager:
                 
                 # Now we use a consistent approach for all resources through the access_resource command
                 # The Unity side will handle mapping resource_name to the appropriate command
-                
-                # Log the resource access
-                await current_ctx.info(f"Accessing resource {resource_name} with parameters: {json.dumps(parameters)}")
-                
+            
                 # Execute using the unified access_resource command
                 result = await execute_unity_operation(
                     f"dynamic resource {resource_name}",
