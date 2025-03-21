@@ -442,6 +442,10 @@ namespace YetAnotherUnityMcp.Editor.Net
                 // Log received message details for debugging
                 Debug.Log($"[TCP Server] Received handshake request: '{message}' (length: {bytesRead})");
                 
+                // Log hex representation for binary analysis
+                string hexBytes = BitConverter.ToString(buffer, 0, bytesRead);
+                Debug.Log($"[TCP Server] Handshake bytes: {hexBytes}");
+                
                 // Trim the message to handle any whitespace or newlines
                 string trimmedMessage = message.Trim();
                 Debug.Log($"[TCP Server] Trimmed handshake request: '{trimmedMessage}'");
@@ -450,6 +454,10 @@ namespace YetAnotherUnityMcp.Editor.Net
                 {
                     // Send handshake response (as plain text, not framed)
                     byte[] response = Encoding.UTF8.GetBytes(HANDSHAKE_RESPONSE);
+                    Debug.Log($"[TCP Server] Sending handshake response: '{HANDSHAKE_RESPONSE}' (length: {response.Length})");
+                    string hexResponse = BitConverter.ToString(response);
+                    Debug.Log($"[TCP Server] Response bytes: {hexResponse}");
+                    
                     await stream.WriteAsync(response, 0, response.Length);
                     await stream.FlushAsync(); // Ensure the response is sent immediately
                     
