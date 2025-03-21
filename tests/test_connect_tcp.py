@@ -50,7 +50,36 @@ async def main():
             
         logger.info("Connected to Unity TCP server successfully")
         
-        # Step 2: Send a test command (get_unity_info)
+        # Step 2: Get schema information (list all tools and resources)
+        logger.info("Retrieving schema information (tools and resources)...")
+        try:
+            schema = await client.get_schema()
+            
+            # Log tools
+            logger.info(f"Found {len(schema.get('tools', []))} tools:")
+            for i, tool in enumerate(schema.get('tools', []), 1):
+                tool_name = tool.get('name', 'Unknown')
+                tool_description = tool.get('description', 'No description')
+                logger.info(f"  {i}. {tool_name}: {tool_description}")
+                
+            # Log resources
+            logger.info(f"Found {len(schema.get('resources', []))} resources:")
+            for i, resource in enumerate(schema.get('resources', []), 1):
+                resource_name = resource.get('name', 'Unknown')
+                resource_description = resource.get('description', 'No description')
+                resource_url = resource.get('urlPattern', 'No URL pattern')
+                logger.info(f"  {i}. {resource_name}: {resource_description}")
+                logger.info(f"     URL Pattern: {resource_url}")
+            
+            # Save schema to file for inspection
+            with open('schema_output.json', 'w') as f:
+                json.dump(schema, f, indent=2)
+            logger.info("Schema saved to schema_output.json")
+            
+        except Exception as e:
+            logger.error(f"Error getting schema: {str(e)}")
+        
+        # Step 3: Send a test command (get_unity_info)
         logger.info("Sending get_unity_info command...")
         try:
             result = await client.get_unity_info()
@@ -58,7 +87,7 @@ async def main():
         except Exception as e:
             logger.error(f"Error sending command: {str(e)}")
             
-        # Step 3: Send another command (get_logs)
+        # Step 4: Send another command (get_logs)
         logger.info("Sending get_logs command...")
         try:
             logs = await client.get_logs(max_logs=10)
@@ -66,7 +95,7 @@ async def main():
         except Exception as e:
             logger.error(f"Error getting logs: {str(e)}")
             
-        # Step 4: Send an execute_code command
+        # Step 5: Send an execute_code command
         logger.info("Sending execute_code command...")
         try:
             code_result = await client.execute_code("Debug.Log(\"Hello from TCP test\"); return DateTime.Now.ToString();")
@@ -82,5 +111,72 @@ async def main():
     except Exception as ex:
         logger.error(f"Test failed: {str(ex)}")
 
+async def get_schema_only():
+    """
+    Simple test that just connects and retrieves the schema information.
+    """
+    try:
+        # Create a client with the TCP URL
+        client = UnityTcpClient("tcp://127.0.0.1:8080/")
+        logger.info("Created TCP client instance")
+        
+        # Connect to the server
+        logger.info("Connecting to Unity TCP server...")
+        connected = await client.connect()
+        
+        if not connected:
+            logger.error("Failed to connect to Unity TCP server")
+            return
+            
+        logger.info("Connected to Unity TCP server successfully")
+        
+        # Get schema information
+        logger.info("Retrieving schema information (tools and resources)...")
+        try:
+            schema = await client.get_schema()
+            
+            # Log tools
+            tools = schema.get('tools', [])
+            logger.info(f"Found {len(tools)} tools:")
+            for i, tool in enumerate(tools, 1):
+                tool_name = tool.get('name', 'Unknown')
+                tool_description = tool.get('description', 'No description')
+                logger.info(f"  {i}. {tool_name}: {tool_description}")
+                
+                # Display input/output schema in a simplified way
+                if 'inputSchema' in tool and 'properties' in tool['inputSchema']:
+                    properties = tool['inputSchema']['properties']
+                    logger.info(f"     Inputs: {', '.join(properties.keys())}")
+                
+            # Log resources
+            resources = schema.get('resources', [])
+            logger.info(f"Found {len(resources)} resources:")
+            for i, resource in enumerate(resources, 1):
+                resource_name = resource.get('name', 'Unknown')
+                resource_description = resource.get('description', 'No description')
+                resource_url = resource.get('urlPattern', 'No URL pattern')
+                logger.info(f"  {i}. {resource_name}: {resource_description}")
+                logger.info(f"     URL Pattern: {resource_url}")
+            
+            # Save schema to file for inspection
+            with open('schema_output.json', 'w') as f:
+                json.dump(schema, f, indent=2)
+            logger.info("Schema saved to schema_output.json")
+            
+        except Exception as e:
+            logger.error(f"Error getting schema: {str(e)}")
+        
+        # Disconnect
+        logger.info("Disconnecting from Unity TCP server...")
+        await client.disconnect()
+        logger.info("Test completed successfully")
+            
+    except Exception as ex:
+        logger.error(f"Test failed: {str(ex)}")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Choose which test to run
+    if len(sys.argv) > 1 and sys.argv[1] == "--schema":
+        asyncio.run(get_schema_only())
+    else:
+        asyncio.run(main())
