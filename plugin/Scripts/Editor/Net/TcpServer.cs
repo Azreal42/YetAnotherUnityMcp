@@ -588,17 +588,17 @@ namespace YetAnotherUnityMcp.Editor.Net
                         // Create a timeout for the read operation
                         using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
                         {
-                            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                            using (var readTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
                                 timeoutCts.Token, _cancellationTokenSource.Token))
                             {
                                 try 
                                 {
                                     // Set a limit to avoid infinite loops
-                                    while (bytesChecked < 1000 && !linkedCts.Token.IsCancellationRequested)
+                                    while (bytesChecked < 1000 && !readTimeoutCts.Token.IsCancellationRequested)
                                     {
                                         // Read one byte asynchronously with timeout
                                         byte[] oneByte = new byte[1];
-                                        int bytesRead = await stream.ReadAsync(oneByte, 0, 1, linkedCts.Token);
+                                        int bytesRead = await stream.ReadAsync(oneByte, 0, 1, readTimeoutCts.Token);
                                         
                                         if (bytesRead == 0)
                                         {
@@ -693,10 +693,10 @@ namespace YetAnotherUnityMcp.Editor.Net
                             // Use a timeout to avoid blocking forever
                             using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
                             {
-                                using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                                using (var endMarkerCts = CancellationTokenSource.CreateLinkedTokenSource(
                                     timeoutCts.Token, _cancellationTokenSource.Token))
                                 {
-                                    int bytesRead = await stream.ReadAsync(endMarkerBytes, 0, 1, linkedCts.Token);
+                                    int bytesRead = await stream.ReadAsync(endMarkerBytes, 0, 1, endMarkerCts.Token);
                                     
                                     if (bytesRead == 0)
                                     {
