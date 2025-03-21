@@ -713,12 +713,12 @@ namespace YetAnotherUnityMcp.Editor.Net
                                 // If this looks like the end of JSON ('}'), we'll be more forgiving
                                 if (endMarker == 0x7D) // '}'
                                 {
-                                    string message = Encoding.UTF8.GetString(messageData);
-                                    if (message.TrimEnd().EndsWith("}"))
+                                    string messageContent = Encoding.UTF8.GetString(messageData);
+                                    if (messageContent.TrimEnd().EndsWith("}"))
                                     {
                                         Debug.LogWarning("[TCP Server] Got '}' instead of ETX - appears to be valid JSON, accepting anyway");
                                         // Queue the message for processing on the main thread
-                                        _messageQueue.Enqueue(new TcpJsonMessage(message, connection));
+                                        _messageQueue.Enqueue(new TcpJsonMessage(messageContent, connection));
                                     }
                                 }
                                 
