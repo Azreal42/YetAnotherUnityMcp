@@ -122,7 +122,7 @@ namespace YetAnotherUnityMcp.Editor.Net
         public void Process(TcpServer server)
         {
             Debug.LogError($"[TCP Server] Error: {ErrorMessage}");
-            server.OnError?.Invoke(ErrorMessage);
+            server.RaiseError(ErrorMessage);
         }
     }
 

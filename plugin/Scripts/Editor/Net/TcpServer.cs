@@ -24,6 +24,16 @@ namespace YetAnotherUnityMcp.Editor.Net
         public event Action<TcpConnection> OnClientDisconnected;
         public event Action<string> OnError;
 
+        /// <summary>
+        /// Raises the OnError event
+        /// </summary>
+        /// <param name="errorMessage">Error message to raise</param>
+        public void RaiseError(string errorMessage)
+        {
+            Debug.LogError($"[TCP Server] Error: {errorMessage}");
+            OnError?.Invoke(errorMessage);
+        }
+
         private TcpListener _listener;
         private CancellationTokenSource _cancellationTokenSource;
         private Task _listenerTask;
