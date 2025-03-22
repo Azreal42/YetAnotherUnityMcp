@@ -26,13 +26,41 @@ namespace YetAnotherUnityMcp.Editor.Models
     }
     
     /// <summary>
-    /// Attribute to mark a class as an MCP Tool
+    /// Attribute to mark a class as an MCP Container
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
+    public class MCPContainerAttribute : Attribute
+    {
+        /// <summary>
+        /// Name prefix for tools and resources in this container
+        /// </summary>
+        public string NamePrefix { get; set; }
+        
+        /// <summary>
+        /// Description of the container
+        /// </summary>
+        public string Description { get; set; }
+        
+        /// <summary>
+        /// Create a new MCP container attribute
+        /// </summary>
+        /// <param name="namePrefix">Name prefix for tools and resources in this container</param>
+        /// <param name="description">Description of the container</param>
+        public MCPContainerAttribute(string namePrefix = null, string description = null)
+        {
+            NamePrefix = namePrefix;
+            Description = description;
+        }
+    }
+    
+    /// <summary>
+    /// Attribute to mark a method or class as an MCP Tool
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
     public class MCPToolAttribute : MCPDocumentedAttribute
     {
         /// <summary>
-        /// Name of the tool. If null, will be inferred from the class name.
+        /// Name of the tool. If null, will be inferred from the method name.
         /// </summary>
         public string Name { get; set; }
         
@@ -44,7 +72,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <summary>
         /// Create a new MCP tool attribute
         /// </summary>
-        /// <param name="name">Name of the tool. If null, will be inferred from the class name.</param>
+        /// <param name="name">Name of the tool. If null, will be inferred from the method name.</param>
         /// <param name="description">Description of the tool</param>
         /// <param name="example">Example usage of the tool</param>
         public MCPToolAttribute(string name = null, string description = null, string example = null) : base(description)
@@ -55,13 +83,13 @@ namespace YetAnotherUnityMcp.Editor.Models
     }
     
     /// <summary>
-    /// Attribute to mark a class as an MCP Resource
+    /// Attribute to mark a method or class as an MCP Resource
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
     public class MCPResourceAttribute : MCPDocumentedAttribute
     {
         /// <summary>
-        /// Name of the resource. If null, will be inferred from the class name.
+        /// Name of the resource. If null, will be inferred from the method name.
         /// </summary>
         public string Name { get; set; }
         
@@ -78,7 +106,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <summary>
         /// Create a new MCP resource attribute
         /// </summary>
-        /// <param name="name">Name of the resource. If null, will be inferred from the class name.</param>
+        /// <param name="name">Name of the resource. If null, will be inferred from the method name.</param>
         /// <param name="description">Description of the resource</param>
         /// <param name="urlPattern">URL pattern for accessing the resource</param>
         /// <param name="example">Example usage of the resource</param>

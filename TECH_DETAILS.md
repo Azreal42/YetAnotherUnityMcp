@@ -306,8 +306,9 @@ The schema information is organized as follows:
 The schema system uses C# attributes for automatic schema generation. This allows for a more maintainable and type-safe approach to schema definition. The key components are:
 
 1. **Attribute-Based Schema Definition**:
-   - `MCPToolAttribute`: Marks a class as an MCP tool with name, description, and example
-   - `MCPResourceAttribute`: Marks a class as an MCP resource with name, description, URL pattern, and example
+   - `MCPContainerAttribute`: Marks a class as a container for multiple MCP tools and resources
+   - `MCPToolAttribute`: Marks a class or method as an MCP tool with name, description, and example
+   - `MCPResourceAttribute`: Marks a class or method as an MCP resource with name, description, URL pattern, and example
    - `MCPSchemaAttribute`: Marks nested classes as input or output schemas
    - `MCPParameterAttribute`: Defines parameters for inputs and outputs with type information
 
@@ -465,9 +466,11 @@ await manager.register_from_schema()
 
 ## Extensibility
 
-The system is designed to be extensible:
+The system is designed to be extensible using two approaches: the traditional class-based approach and the newer container-based approach.
 
-1. **Adding New Commands**: To add a new command:
+### Class-Based Approach
+
+1. **Adding New Commands**: To add a new command using the traditional approach:
    - Create a new static command class ending with "Command" (e.g., `MyNewCommand`)
    - Add the `[MCPTool]` attribute with name, description, and example
    - Implement a static `Execute` method with appropriate parameters
@@ -479,7 +482,7 @@ The system is designed to be extensible:
    - Register the tool in mcp/tools/__init__.py
    - The schema will be automatically generated and registered
 
-2. **Adding New Resources**: To add a new resource:
+2. **Adding New Resources**: To add a new resource using the traditional approach:
    - Create a new resource handler class ending with "Resource" (e.g., `MyNewResource`)
    - Add the `[MCPResource]` attribute with name, description, URL pattern, and example
    - Implement a static `GetResource` method with parameters matching URL pattern variables
@@ -488,6 +491,58 @@ The system is designed to be extensible:
    - Use the unified execution pattern with execute_unity_operation
    - Register the resource in mcp/resources/__init__.py
    - The schema will be automatically generated and registered
+
+### Container-Based Approach
+
+The newer, more efficient container-based approach allows you to group related functionality:
+
+1. **Creating a Container**: To create a new container for related functionality:
+   - Create a static container class (e.g., `MyDomainContainer`)
+   - Add the `[MCPContainer]` attribute with a prefix and description
+   - Implement static methods for tools and resources in this domain
+   - Each method will be registered with the container prefix
+   
+2. **Adding Tools to a Container**:
+   - Add static methods with the `[MCPTool]` attribute
+   - Implement the tool functionality directly in the method
+   - Add `[MCPParameter]` attributes to method parameters
+   - The tools will be automatically registered with the container prefix
+
+3. **Adding Resources to a Container**:
+   - Add static methods with the `[MCPResource]` attribute
+   - Implement the resource functionality directly in the method
+   - Add `[MCPParameter]` attributes to method parameters
+   - The resources will be automatically registered with the container prefix
+
+For example:
+
+```csharp
+[MCPContainer("physics", "Physics-related tools and resources")]
+public static class PhysicsMcpContainer
+{
+    [MCPTool("raycast", "Cast a ray in the scene", "physics_raycast(0, 0, 0, 0, 1, 0, 10)")]
+    public static string Raycast(
+        [MCPParameter("origin_x", "Origin X coordinate", "number", true)] float originX,
+        [MCPParameter("origin_y", "Origin Y coordinate", "number", true)] float originY,
+        [MCPParameter("origin_z", "Origin Z coordinate", "number", true)] float originZ,
+        [MCPParameter("direction_x", "Direction X component", "number", true)] float directionX,
+        [MCPParameter("direction_y", "Direction Y component", "number", true)] float directionY,
+        [MCPParameter("direction_z", "Direction Z component", "number", true)] float directionZ,
+        [MCPParameter("max_distance", "Maximum ray distance", "number", false)] float maxDistance = 100f)
+    {
+        // Implementation...
+    }
+
+    [MCPResource("collision_layers", "Get collision layer information", 
+                 "unity://physics/layers", "unity://physics/layers")]
+    public static string GetCollisionLayers()
+    {
+        // Implementation...
+    }
+}
+```
+
+For more details on the container-based approach, see the [MCP Container Documentation](plugin/MCP_CONTAINER_README.md).
 
 ## Architecture Diagram
 

@@ -18,7 +18,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
         public void Execute_ReturnsValidSchemaJson()
         {
             // Act
-            string result = GetSchemaCommand.Execute();
+            string result = YetAnotherUnityMcp.Editor.Commands.EditorMcpContainer.GetSchema();
             
             // Assert
             Assert.IsNotNull(result, "Result should not be null");
@@ -65,7 +65,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
         public void Execute_ToolsHaveRequiredProperties()
         {
             // Act
-            string result = GetSchemaCommand.Execute();
+            string result = YetAnotherUnityMcp.Editor.Commands.EditorMcpContainer.GetSchema();
             JObject schemaJson = JObject.Parse(result);
             JArray toolsArray = schemaJson["tools"] as JArray;
             
@@ -93,7 +93,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
         public void Execute_ResourcesHaveRequiredProperties()
         {
             // Act
-            string result = GetSchemaCommand.Execute();
+            string result = YetAnotherUnityMcp.Editor.Commands.EditorMcpContainer.GetSchema();
             JObject schemaJson = JObject.Parse(result);
             
             // Resources might be an empty array if no resources are registered, which is valid
@@ -127,27 +127,35 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
         
         [Test]
-        public void GetSchemaCommand_SchemaAttributesWereGenerated()
+        public void EditorMcpContainer_SchemaMethodExists()
         {
-            // Get the type to check its attributes were processed
-            Type commandType = typeof(GetSchemaCommand);
-            
-            // Use MCPAttributeUtil to generate schema
-            ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromCommandType(commandType);
+            // Get the method info to check existence
+            Type containerType = typeof(YetAnotherUnityMcp.Editor.Commands.EditorMcpContainer);
+            var methodInfo = containerType.GetMethod("GetSchema");
             
             // Assert
-            Assert.IsNotNull(descriptor, "Should be able to generate descriptor");
-            Assert.AreEqual("get_schema", descriptor.Name, "Name should match");
-            Assert.AreEqual("Get information about available tools and resources", descriptor.Description, "Description should match");
+            Assert.IsNotNull(methodInfo, "GetSchema method should exist");
+            Assert.AreEqual("String", methodInfo.ReturnType.Name, "Return type should be String");
             
-            // Check input schema
-            Assert.IsNotNull(descriptor.InputSchema, "Input schema should not be null");
-            Assert.AreEqual(0, descriptor.InputSchema.Properties.Count, "Input schema should have no properties");
+            // Check if it has the MCPResource attribute
+            var resourceAttr = methodInfo.GetCustomAttributes(typeof(MCPResourceAttribute), false);
+            Assert.IsTrue(resourceAttr.Length > 0, "Method should have MCPResource attribute");
             
-            // Check output schema
-            Assert.IsNotNull(descriptor.OutputSchema, "Output schema should not be null");
-            Assert.IsTrue(descriptor.OutputSchema.Properties.ContainsKey("result"), "Output schema should have 'result' property");
-            Assert.AreEqual("string", descriptor.OutputSchema.Properties["result"].Type, "Output type should be 'string'");
+            // Check the resource is properly registered in the registry
+            var registry = MCPRegistry.Instance;
+            var resources = registry.Schema.Resources;
+            bool foundResource = false;
+            
+            foreach (var resource in resources)
+            {
+                if (resource.Name.Contains("schema"))
+                {
+                    foundResource = true;
+                    break;
+                }
+            }
+            
+            Assert.IsTrue(foundResource, "Schema resource should be registered");
         }
     }
 }

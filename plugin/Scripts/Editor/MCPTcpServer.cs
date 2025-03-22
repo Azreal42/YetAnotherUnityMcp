@@ -10,6 +10,7 @@ using System.Linq;
 using YetAnotherUnityMcp.Editor.Commands;
 using YetAnotherUnityMcp.Editor.Models;
 using YetAnotherUnityMcp.Editor.Net;
+using YetAnotherUnityMcp.Editor.Containers;
 
 namespace YetAnotherUnityMcp.Editor
 {
@@ -291,7 +292,7 @@ namespace YetAnotherUnityMcp.Editor
                     {
                         
                         case "get_schema":
-                            result = GetSchemaCommand.Execute();
+                            result = YaumSpecificMcpContainer.GetSchema();
                             break;
                             
                         case "access_resource":

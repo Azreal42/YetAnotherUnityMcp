@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Newtonsoft.Json;
 
 namespace YetAnotherUnityMcp.Editor.Models
@@ -97,6 +98,18 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         [JsonProperty("example")]
         public string Example { get; set; }
+        
+        /// <summary>
+        /// Method info for direct method invocation (used with container-based tools)
+        /// </summary>
+        [JsonIgnore]
+        public MethodInfo MethodInfo { get; set; }
+        
+        /// <summary>
+        /// Container type where the method is defined (used with container-based tools)
+        /// </summary>
+        [JsonIgnore]
+        public Type ContainerType { get; set; }
     }
     
     /// <summary>
@@ -140,6 +153,18 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         [JsonProperty("example")]
         public string Example { get; set; }
+        
+        /// <summary>
+        /// Method info for direct method invocation (used with container-based resources)
+        /// </summary>
+        [JsonIgnore]
+        public MethodInfo MethodInfo { get; set; }
+        
+        /// <summary>
+        /// Container type where the method is defined (used with container-based resources)
+        /// </summary>
+        [JsonIgnore]
+        public Type ContainerType { get; set; }
     }
     
     /// <summary>

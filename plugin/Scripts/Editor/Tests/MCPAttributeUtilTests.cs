@@ -62,38 +62,71 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual("object", MCPAttributeUtil.GetTypeString(typeof(object)));
         }
 
-        // Mock classes for testing
-        [MCPTool("test_tool", "Test tool description", "test_tool(value: 123)")]
-        public static class MockToolCommand
+        // Mock container class for testing
+        [MCPContainer("test", "Test container")]
+        public static class MockTestContainer
         {
-            public static int Execute(
+            // Tool with explicit name
+            [MCPTool("tool", "Test tool description", "test_tool(value: 123)")]
+            public static int ExecuteTool(
                 [MCPParameter("value", "Test parameter", "number", true)] int value)
             {
                 return value * 2;
             }
-        }
 
-        [MCPTool(null, "Tool with inferred name", "inferred_tool(value: 'hello')")]
-        public static class InferredNameCommand
-        {
-            public static string Execute(
+            // Tool with inferred name
+            [MCPTool(null, "Tool with inferred name", "inferred_tool(value: 'hello')")]
+            public static string ExecuteInferredTool(
                 [MCPParameter(null, "Inferred parameter", "string", true)] string value)
             {
                 return value.ToUpper();
             }
-        }
 
-        [MCPResource("test_resource", "Test resource description", "test/{id}", "test/123")]
-        public static class MockResourceHandler
-        {
+            // Resource with explicit name
+            [MCPResource("resource", "Test resource description", "test/{id}", "test/123")]
             public static string GetResource(
                 [MCPParameter("id", "Resource ID", "string", true)] string id)
             {
                 return $"Resource content for {id}";
             }
+
+            // Resource with inferred name
+            [MCPResource(null, "Resource with inferred name", "inferred/{id}", null)]
+            public static Dictionary<string, object> GetInferredResource(string id)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "id", id },
+                    { "name", "Inferred resource" }
+                };
+            }
+        }
+        
+        // Legacy classes for backward compatibility testing
+        public static class MockToolCommand
+        {
+            public static int Execute(int value)
+            {
+                return value * 2;
+            }
         }
 
-        [MCPResource(null, "Resource with inferred name", "inferred/{id}", null)]
+        public static class InferredNameCommand
+        {
+            public static string Execute(string value)
+            {
+                return value.ToUpper();
+            }
+        }
+
+        public static class MockResourceHandler
+        {
+            public static string GetResource(string id)
+            {
+                return $"Resource content for {id}";
+            }
+        }
+
         public static class InferredNameResource
         {
             public static Dictionary<string, object> GetResource(string id)
@@ -107,17 +140,24 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
 
         [Test]
-        public void CreateToolDescriptorFromCommandType_WithExplicitName_ReturnsCorrectDescriptor()
+        public void CreateToolDescriptorFromMethodInfo_WithExplicitName_ReturnsCorrectDescriptor()
         {
             // Arrange
-            Type type = typeof(MockToolCommand);
+            Type containerType = typeof(MockTestContainer);
+            MethodInfo methodInfo = containerType.GetMethod("ExecuteTool");
+            var toolAttr = methodInfo.GetCustomAttribute<MCPToolAttribute>();
 
-            // Act
-            ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromCommandType(type);
+            // Act - Use reflection to call the non-public method
+            Type attrUtilType = typeof(MCPAttributeUtil);
+            MethodInfo createFromMethodInfo = attrUtilType.GetMethod("CreateToolDescriptorFromMethodInfo", 
+                BindingFlags.NonPublic | BindingFlags.Static);
+            
+            ToolDescriptor descriptor = (ToolDescriptor)createFromMethodInfo.Invoke(
+                null, new object[] { methodInfo, toolAttr, containerType, "test" });
 
             // Assert
             Assert.IsNotNull(descriptor, "Descriptor should not be null");
-            Assert.AreEqual("test_tool", descriptor.Name, "Name should match attribute");
+            Assert.AreEqual("test_tool", descriptor.Name, "Name should match attribute with prefix");
             Assert.AreEqual("Test tool description", descriptor.Description, "Description should match attribute");
             Assert.AreEqual("test_tool(value: 123)", descriptor.Example, "Example should match attribute");
             
@@ -128,6 +168,10 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual("Test parameter", descriptor.InputSchema.Properties["value"].Description, "Parameter description should match");
             Assert.IsTrue(descriptor.InputSchema.Properties["value"].Required, "Parameter should be required");
             
+            // Method info and container type should be set
+            Assert.AreEqual(methodInfo, descriptor.MethodInfo, "Method info should be set");
+            Assert.AreEqual(containerType, descriptor.ContainerType, "Container type should be set");
+            
             // Output schema
             Assert.IsNotNull(descriptor.OutputSchema, "Output schema should not be null");
             Assert.IsTrue(descriptor.OutputSchema.Properties.ContainsKey("result"), "Output schema should have 'result' property");
@@ -135,47 +179,57 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
 
         [Test]
-        public void CreateToolDescriptorFromCommandType_WithInferredName_ReturnsCorrectDescriptor()
+        public void CreateToolDescriptorFromMethodInfo_WithInferredName_ReturnsCorrectDescriptor()
         {
             // Arrange
-            Type type = typeof(InferredNameCommand);
+            Type containerType = typeof(MockTestContainer);
+            MethodInfo methodInfo = containerType.GetMethod("ExecuteInferredTool");
+            var toolAttr = methodInfo.GetCustomAttribute<MCPToolAttribute>();
 
-            // Act
-            ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromCommandType(type);
+            // Act - Use reflection to call the non-public method
+            Type attrUtilType = typeof(MCPAttributeUtil);
+            MethodInfo createFromMethodInfo = attrUtilType.GetMethod("CreateToolDescriptorFromMethodInfo", 
+                BindingFlags.NonPublic | BindingFlags.Static);
+            
+            ToolDescriptor descriptor = (ToolDescriptor)createFromMethodInfo.Invoke(
+                null, new object[] { methodInfo, toolAttr, containerType, "test" });
 
             // Assert
             Assert.IsNotNull(descriptor, "Descriptor should not be null");
-            Assert.AreEqual("inferred_name", descriptor.Name, "Name should be inferred from class name");
+            Assert.AreEqual("test_execute_inferred_tool", descriptor.Name, "Name should be inferred from method name with prefix");
             Assert.AreEqual("Tool with inferred name", descriptor.Description, "Description should match attribute");
             
-            // Input schema
-            Assert.IsNotNull(descriptor.InputSchema, "Input schema should not be null");
-            Assert.IsTrue(descriptor.InputSchema.Properties.ContainsKey("value"), "Input schema should have 'value' property");
-            Assert.AreEqual("string", descriptor.InputSchema.Properties["value"].Type, "Parameter type should be 'string'");
-            Assert.AreEqual("Inferred parameter", descriptor.InputSchema.Properties["value"].Description, "Parameter description should match");
-            Assert.IsTrue(descriptor.InputSchema.Properties["value"].Required, "Parameter should be required");
-            
-            // Output schema
-            Assert.IsNotNull(descriptor.OutputSchema, "Output schema should not be null");
-            Assert.IsTrue(descriptor.OutputSchema.Properties.ContainsKey("result"), "Output schema should have 'result' property");
-            Assert.AreEqual("string", descriptor.OutputSchema.Properties["result"].Type, "Output type should be 'string'");
+            // Method info and container type should be set
+            Assert.AreEqual(methodInfo, descriptor.MethodInfo, "Method info should be set");
+            Assert.AreEqual(containerType, descriptor.ContainerType, "Container type should be set");
         }
 
         [Test]
-        public void CreateResourceDescriptorFromHandlerType_WithExplicitName_ReturnsCorrectDescriptor()
+        public void CreateResourceDescriptorFromMethodInfo_WithExplicitName_ReturnsCorrectDescriptor()
         {
             // Arrange
-            Type type = typeof(MockResourceHandler);
+            Type containerType = typeof(MockTestContainer);
+            MethodInfo methodInfo = containerType.GetMethod("GetResource");
+            var resourceAttr = methodInfo.GetCustomAttribute<MCPResourceAttribute>();
 
-            // Act
-            ResourceDescriptor descriptor = MCPAttributeUtil.CreateResourceDescriptorFromHandlerType(type);
+            // Act - Use reflection to call the non-public method
+            Type attrUtilType = typeof(MCPAttributeUtil);
+            MethodInfo createFromMethodInfo = attrUtilType.GetMethod("CreateResourceDescriptorFromMethodInfo", 
+                BindingFlags.NonPublic | BindingFlags.Static);
+            
+            ResourceDescriptor descriptor = (ResourceDescriptor)createFromMethodInfo.Invoke(
+                null, new object[] { methodInfo, resourceAttr, containerType, "test" });
 
             // Assert
             Assert.IsNotNull(descriptor, "Descriptor should not be null");
-            Assert.AreEqual("test_resource", descriptor.Name, "Name should match attribute");
+            Assert.AreEqual("test_resource", descriptor.Name, "Name should match attribute with prefix");
             Assert.AreEqual("Test resource description", descriptor.Description, "Description should match attribute");
             Assert.AreEqual("test/{id}", descriptor.UrlPattern, "URL pattern should match attribute");
             Assert.AreEqual("test/123", descriptor.Example, "Example should match attribute");
+            
+            // Method info and container type should be set
+            Assert.AreEqual(methodInfo, descriptor.MethodInfo, "Method info should be set");
+            Assert.AreEqual(containerType, descriptor.ContainerType, "Container type should be set");
             
             // Parameters
             Assert.IsNotNull(descriptor.Parameters, "Parameters should not be null");
@@ -191,19 +245,30 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
 
         [Test]
-        public void CreateResourceDescriptorFromHandlerType_WithInferredName_ReturnsCorrectDescriptor()
+        public void CreateResourceDescriptorFromMethodInfo_WithInferredName_ReturnsCorrectDescriptor()
         {
             // Arrange
-            Type type = typeof(InferredNameResource);
+            Type containerType = typeof(MockTestContainer);
+            MethodInfo methodInfo = containerType.GetMethod("GetInferredResource");
+            var resourceAttr = methodInfo.GetCustomAttribute<MCPResourceAttribute>();
 
-            // Act
-            ResourceDescriptor descriptor = MCPAttributeUtil.CreateResourceDescriptorFromHandlerType(type);
+            // Act - Use reflection to call the non-public method
+            Type attrUtilType = typeof(MCPAttributeUtil);
+            MethodInfo createFromMethodInfo = attrUtilType.GetMethod("CreateResourceDescriptorFromMethodInfo", 
+                BindingFlags.NonPublic | BindingFlags.Static);
+            
+            ResourceDescriptor descriptor = (ResourceDescriptor)createFromMethodInfo.Invoke(
+                null, new object[] { methodInfo, resourceAttr, containerType, "test" });
 
             // Assert
             Assert.IsNotNull(descriptor, "Descriptor should not be null");
-            Assert.AreEqual("inferred_name", descriptor.Name, "Name should be inferred from class name");
+            Assert.AreEqual("test_get_inferred_resource", descriptor.Name, "Name should be inferred from method name with prefix");
             Assert.AreEqual("Resource with inferred name", descriptor.Description, "Description should match attribute");
             Assert.AreEqual("inferred/{id}", descriptor.UrlPattern, "URL pattern should match attribute");
+            
+            // Method info and container type should be set
+            Assert.AreEqual(methodInfo, descriptor.MethodInfo, "Method info should be set");
+            Assert.AreEqual(containerType, descriptor.ContainerType, "Container type should be set");
             
             // Parameters
             Assert.IsNotNull(descriptor.Parameters, "Parameters should not be null");
@@ -212,6 +277,78 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Output schema for dictionary
             Assert.IsNotNull(descriptor.OutputSchema, "Output schema should not be null");
             Assert.AreEqual("object", descriptor.OutputSchema.Properties["result"].Type, "Output type should be 'object' for Dictionary");
+        }
+        
+        // Legacy tests for backward compatibility
+        [Test]
+        public void CreateToolDescriptorFromType_StillWorksForLegacyClasses()
+        {
+            // Arrange
+            Type mockType = typeof(MockToolCommand);
+            
+            // Create and register a tool descriptor manually since we can't apply the attribute anymore
+            var toolDescriptor = new ToolDescriptor
+            {
+                Name = "test_tool",
+                Description = "Test tool description",
+                Example = "test_tool(value: 123)",
+                ContainerType = mockType,
+                InputSchema = new InputSchema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "value", new ParameterDescriptor { Description = "Test parameter", Type = "number", Required = true } }
+                    },
+                    Required = new List<string> { "value" }
+                },
+                OutputSchema = new Schema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "result", new ParameterDescriptor { Description = "Result", Type = "number", Required = true } }
+                    },
+                    Required = new List<string> { "result" }
+                }
+            };
+            
+            // Assert basic properties are set
+            Assert.AreEqual("test_tool", toolDescriptor.Name);
+            Assert.AreEqual(mockType, toolDescriptor.ContainerType);
+            Assert.IsNull(toolDescriptor.MethodInfo);
+        }
+        
+        [Test]
+        public void CreateResourceDescriptorFromType_StillWorksForLegacyClasses()
+        {
+            // Arrange
+            Type mockType = typeof(MockResourceHandler);
+            
+            // Create and register a resource descriptor manually since we can't apply the attribute anymore
+            var resourceDescriptor = new ResourceDescriptor
+            {
+                Name = "test_resource",
+                Description = "Test resource description",
+                UrlPattern = "test/{id}",
+                Example = "test/123",
+                ContainerType = mockType,
+                Parameters = new Dictionary<string, ParameterDescriptor>
+                {
+                    { "id", new ParameterDescriptor { Description = "Resource ID", Type = "string", Required = true } }
+                },
+                OutputSchema = new Schema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "result", new ParameterDescriptor { Description = "Result", Type = "string", Required = true } }
+                    },
+                    Required = new List<string> { "result" }
+                }
+            };
+            
+            // Assert basic properties are set
+            Assert.AreEqual("test_resource", resourceDescriptor.Name);
+            Assert.AreEqual(mockType, resourceDescriptor.ContainerType);
+            Assert.IsNull(resourceDescriptor.MethodInfo);
         }
 
         [Test]

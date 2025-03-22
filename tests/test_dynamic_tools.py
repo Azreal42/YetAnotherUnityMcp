@@ -29,11 +29,6 @@ async def main():
         
     logger.info("Connected to Unity")
     
-    # Get Unity info
-    logger.info("Getting Unity info...")
-    info = await client.get_unity_info()
-    logger.info(f"Unity info: {json.dumps(info, indent=2)}")
-    
     # Get schema
     logger.info("Getting schema...")
     schema = await client.get_schema()

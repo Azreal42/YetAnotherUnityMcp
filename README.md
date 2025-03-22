@@ -125,9 +125,12 @@ The Unity plugin hosts a TCP server that listens for connections from MCP client
 - Supports handshake and ping/pong for connection health monitoring
 - Uses a dynamic registry of tools and resources with reflection-based attribute discovery
 - Provides invokers for dynamically accessing resources and tools by name
+- Supports container-based organization of tools and resources
 - Executes commands sent by clients (e.g., running C# code, taking screenshots)
 - Returns results back to clients
 - Provides a UI for monitoring connections and debugging
+
+For detailed information about the container-based approach, see the [MCP Container Documentation](plugin/MCP_CONTAINER_README.md).
 
 ### Python MCP Client
 

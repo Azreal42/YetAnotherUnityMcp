@@ -160,8 +160,15 @@ namespace YetAnotherUnityMcp.Editor.Models
                 
                 foreach (var type in types)
                 {
-                    // Check if the type has the MCPTool attribute
-                    if (type.GetCustomAttribute<MCPToolAttribute>() != null)
+                    // Check if the type has the MCPContainer attribute
+                    var containerAttr = type.GetCustomAttribute<MCPContainerAttribute>();
+                    if (containerAttr != null)
+                    {
+                        // Scan methods in container for tool/resource attributes
+                        RegisterMethodsFromContainer(type, containerAttr);
+                    }
+                    // Check if the type has the MCPTool attribute (legacy class-based)
+                    else if (type.GetCustomAttribute<MCPToolAttribute>() != null)
                     {
                         // Check if it's a command class (ends with "Command")
                         if (type.Name.EndsWith("Command"))
@@ -179,6 +186,153 @@ namespace YetAnotherUnityMcp.Editor.Models
             catch (Exception ex)
             {
                 Debug.LogError($"[MCPRegistry] Error scanning assembly for commands: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register methods from a container class with MCPTool or MCPResource attributes
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        public void RegisterMethodsFromContainer(Type containerType)
+        {
+            // Get the container attribute
+            var containerAttr = containerType.GetCustomAttribute<MCPContainerAttribute>();
+            if (containerAttr == null)
+            {
+                Debug.LogError($"[MCPRegistry] Type {containerType.Name} does not have MCPContainer attribute");
+                return;
+            }
+            
+            // Call the internal method with the attribute
+            RegisterMethodsFromContainer(containerType, containerAttr);
+        }
+        
+        /// <summary>
+        /// Register methods from a container class with MCPTool or MCPResource attributes
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        /// <param name="containerAttr">Container attribute</param>
+        internal void RegisterMethodsFromContainer(Type containerType, MCPContainerAttribute containerAttr)
+        {
+            try
+            {
+                // Get all public static methods from the container
+                var methods = containerType.GetMethods(BindingFlags.Public | BindingFlags.Static);
+                string namePrefix = containerAttr.NamePrefix ?? "";
+                
+                foreach (var method in methods)
+                {
+                    // Check for tool attribute
+                    var toolAttr = method.GetCustomAttribute<MCPToolAttribute>();
+                    if (toolAttr != null)
+                    {
+                        RegisterToolMethod(containerType, method, toolAttr, namePrefix);
+                        continue;
+                    }
+                    
+                    // Check for resource attribute
+                    var resourceAttr = method.GetCustomAttribute<MCPResourceAttribute>();
+                    if (resourceAttr != null)
+                    {
+                        RegisterResourceMethod(containerType, method, resourceAttr, namePrefix);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error registering methods from container {containerType.Name}: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a method as a tool
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        /// <param name="method">Method to register</param>
+        /// <param name="toolAttr">Tool attribute</param>
+        /// <param name="namePrefix">Name prefix from container</param>
+        private void RegisterToolMethod(Type containerType, MethodInfo method, MCPToolAttribute toolAttr, string namePrefix)
+        {
+            try
+            {
+                // Derive name from attribute or method name with prefix
+                string toolName = toolAttr.Name;
+                if (string.IsNullOrEmpty(toolName))
+                {
+                    // Convert method name to snake_case
+                    toolName = MCPAttributeUtil.ConvertCamelCaseToSnakeCase(method.Name);
+                }
+                
+                // Apply prefix if available
+                if (!string.IsNullOrEmpty(namePrefix) && !toolName.StartsWith(namePrefix))
+                {
+                    toolName = $"{namePrefix}_{toolName}";
+                }
+                
+                // Create tool descriptor
+                var descriptor = new ToolDescriptor
+                {
+                    Name = toolName,
+                    Description = toolAttr.Description ?? $"Tool for {method.Name}",
+                    Example = toolAttr.Example,
+                    InputSchema = MCPAttributeUtil.GetSchemaFromMethodParameters(method),
+                    OutputSchema = MCPAttributeUtil.GetSchemaFromReturnType(method),
+                    MethodInfo = method,
+                    ContainerType = containerType
+                };
+                
+                RegisterTool(descriptor);
+                Debug.Log($"[MCPRegistry] Registered method {containerType.Name}.{method.Name} as tool {descriptor.Name}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error registering tool method {method.Name}: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Register a method as a resource
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        /// <param name="method">Method to register</param>
+        /// <param name="resourceAttr">Resource attribute</param>
+        /// <param name="namePrefix">Name prefix from container</param>
+        private void RegisterResourceMethod(Type containerType, MethodInfo method, MCPResourceAttribute resourceAttr, string namePrefix)
+        {
+            try
+            {
+                // Derive name from attribute or method name with prefix
+                string resourceName = resourceAttr.Name;
+                if (string.IsNullOrEmpty(resourceName))
+                {
+                    // Convert method name to snake_case
+                    resourceName = MCPAttributeUtil.ConvertCamelCaseToSnakeCase(method.Name);
+                }
+                
+                // Apply prefix if available
+                if (!string.IsNullOrEmpty(namePrefix) && !resourceName.StartsWith(namePrefix))
+                {
+                    resourceName = $"{namePrefix}_{resourceName}";
+                }
+                
+                // Create resource descriptor
+                var descriptor = new ResourceDescriptor
+                {
+                    Name = resourceName,
+                    Description = resourceAttr.Description ?? $"Resource for {method.Name}",
+                    UrlPattern = resourceAttr.UrlPattern ?? $"unity://{resourceName}",
+                    Example = resourceAttr.Example,
+                    OutputSchema = MCPAttributeUtil.GetSchemaFromReturnType(method),
+                    MethodInfo = method,
+                    ContainerType = containerType
+                };
+                
+                RegisterResource(descriptor);
+                Debug.Log($"[MCPRegistry] Registered method {containerType.Name}.{method.Name} as resource {descriptor.Name}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[MCPRegistry] Error registering resource method {method.Name}: {ex.Message}");
             }
         }
         

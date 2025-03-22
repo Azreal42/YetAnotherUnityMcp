@@ -38,6 +38,30 @@ namespace YetAnotherUnityMcp.Editor.Models
                 throw new ArgumentException($"Resource not found in registry: {resourceName}");
             }
             
+            // Check if this is a method-based resource
+            if (resourceDescriptor.MethodInfo != null && resourceDescriptor.ContainerType != null)
+            {
+                Debug.Log($"[ResourceInvoker] Using container method for resource: {resourceName}");
+                
+                // Get the method info
+                var methodInfo = resourceDescriptor.MethodInfo;
+                var containerType = resourceDescriptor.ContainerType;
+                
+                // Map parameters
+                var containerMethodParams = methodInfo.GetParameters();
+                var containerArgs = MapParameters(containerMethodParams, parameters);
+                
+                // Invoke the method
+                Debug.Log($"[ResourceInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
+                object result = methodInfo.Invoke(null, containerArgs);
+                Debug.Log($"[ResourceInvoker] Resource {resourceName} invoked successfully");
+                
+                return result;
+            }
+            
+            // Legacy path - class-based resource
+            Debug.Log($"[ResourceInvoker] Using legacy class handler for resource: {resourceName}");
+            
             // Find the resource handler type
             var handlerType = registry.GetResourceHandlerType(resourceName);
             if (handlerType == null)
@@ -55,15 +79,15 @@ namespace YetAnotherUnityMcp.Editor.Models
             }
             
             // Map parameters
-            var methodParams = getResourceMethod.GetParameters();
-            var args = MapParameters(methodParams, parameters);
+            var resourceMethodParams = getResourceMethod.GetParameters();
+            var resourceArgs = MapParameters(resourceMethodParams, parameters);
             
             // Invoke the method
             Debug.Log($"[ResourceInvoker] Invoking {handlerType.Name}.GetResource");
-            object result = getResourceMethod.Invoke(null, args);
+            object getResourceResult = getResourceMethod.Invoke(null, resourceArgs);
             Debug.Log($"[ResourceInvoker] Resource {resourceName} invoked successfully");
             
-            return result;
+            return getResourceResult;
         }
         
         /// <summary>
@@ -171,6 +195,30 @@ namespace YetAnotherUnityMcp.Editor.Models
                 throw new ArgumentException($"Tool not found in registry: {toolName}");
             }
             
+            // Check if this is a method-based tool
+            if (toolDescriptor.MethodInfo != null && toolDescriptor.ContainerType != null)
+            {
+                Debug.Log($"[ToolInvoker] Using container method for tool: {toolName}");
+                
+                // Get the method info
+                var methodInfo = toolDescriptor.MethodInfo;
+                var containerType = toolDescriptor.ContainerType;
+                
+                // Map parameters
+                var containerToolParams = methodInfo.GetParameters();
+                var containerArgs = ResourceInvoker.MapParameters(containerToolParams, parameters);
+                
+                // Invoke the method
+                Debug.Log($"[ToolInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
+                object result = methodInfo.Invoke(null, containerArgs);
+                Debug.Log($"[ToolInvoker] Tool {toolName} invoked successfully");
+                
+                return result;
+            }
+            
+            // Legacy path - class-based tool
+            Debug.Log($"[ToolInvoker] Using legacy class handler for tool: {toolName}");
+            
             // Find the tool handler type
             var handlerType = registry.GetToolHandlerType(toolName);
             if (handlerType == null)
@@ -188,15 +236,15 @@ namespace YetAnotherUnityMcp.Editor.Models
             }
             
             // Map parameters
-            var methodParams = executeMethod.GetParameters();
-            var args = ResourceInvoker.MapParameters(methodParams, parameters);
+            var executeMethodParams = executeMethod.GetParameters();
+            var executeArgs = ResourceInvoker.MapParameters(executeMethodParams, parameters);
             
             // Invoke the method
             Debug.Log($"[ToolInvoker] Invoking {handlerType.Name}.Execute");
-            object result = executeMethod.Invoke(null, args);
+            object executeResult = executeMethod.Invoke(null, executeArgs);
             Debug.Log($"[ToolInvoker] Tool {toolName} invoked successfully");
             
-            return result;
+            return executeResult;
         }
     }
 }

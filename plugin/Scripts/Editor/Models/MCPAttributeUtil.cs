@@ -579,5 +579,295 @@ namespace YetAnotherUnityMcp.Editor.Models
                 return "object";
             }
         }
+        
+        /// <summary>
+        /// Get schema from a method's parameters
+        /// </summary>
+        /// <param name="method">Method to get parameter schema for</param>
+        /// <returns>InputSchema object for the method's parameters</returns>
+        public static InputSchema GetSchemaFromMethodParameters(MethodInfo method)
+        {
+            var schema = new InputSchema();
+            
+            // Process method parameters
+            var parameters = method.GetParameters();
+            foreach (var param in parameters)
+            {
+                string paramName = param.Name;
+                string paramType = GetTypeString(param.ParameterType);
+                bool isRequired = !param.IsOptional;
+                string description = $"{char.ToUpper(paramName[0]) + paramName.Substring(1)} parameter";
+                
+                // Check for MCPParameter attribute
+                var paramAttr = param.GetCustomAttribute<MCPParameterAttribute>();
+                if (paramAttr != null)
+                {
+                    paramName = paramAttr.Name ?? paramName;
+                    paramType = paramAttr.Type ?? paramType;
+                    isRequired = paramAttr.Required;
+                    description = paramAttr.Description ?? description;
+                }
+                
+                // Add to schema
+                schema.Properties[paramName] = new ParameterDescriptor
+                {
+                    Type = paramType,
+                    Description = description,
+                    Required = isRequired
+                };
+                
+                if (isRequired)
+                {
+                    schema.Required.Add(paramName);
+                }
+            }
+            
+            return schema;
+        }
+        
+        /// <summary>
+        /// Get schema from a method's return type
+        /// </summary>
+        /// <param name="method">Method to get return type schema for</param>
+        /// <returns>Schema object for the method's return type</returns>
+        public static Schema GetSchemaFromReturnType(MethodInfo method)
+        {
+            var schema = new Schema();
+            var returnType = method.ReturnType;
+            
+            if (returnType == typeof(void))
+            {
+                // No return value
+                return schema;
+            }
+            
+            string returnTypeName = "result";
+            string returnTypeStr = GetTypeString(returnType);
+            
+            if (returnType.IsPrimitive || returnType == typeof(string))
+            {
+                // Simple return type
+                schema.Properties[returnTypeName] = new ParameterDescriptor
+                {
+                    Type = returnTypeStr,
+                    Description = "Result of the operation",
+                    Required = true
+                };
+            }
+            else if (returnType.IsClass || returnType.IsValueType)
+            {
+                // Check if the type is a dictionary
+                bool isDictionary = returnType.IsGenericType && 
+                                  (returnType.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
+                                   returnType.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+                
+                // Complex return type - check for properties with attributes
+                var props = returnType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                
+                if (props.Length > 0 && !isDictionary)
+                {
+                    // For complex types with properties, add each property to the schema
+                    foreach (var prop in props)
+                    {
+                        string propName = prop.Name;
+                        string propType = GetTypeString(prop.PropertyType);
+                        bool isRequired = true;
+                        string description = $"{propName} property";
+                        
+                        // Check for MCPParameter attribute
+                        var paramAttr = prop.GetCustomAttribute<MCPParameterAttribute>();
+                        if (paramAttr != null)
+                        {
+                            propName = paramAttr.Name ?? propName;
+                            propType = paramAttr.Type ?? propType;
+                            isRequired = paramAttr.Required;
+                            description = paramAttr.Description ?? description;
+                        }
+                        
+                        // Add to schema
+                        schema.Properties[propName] = new ParameterDescriptor
+                        {
+                            Type = propType,
+                            Description = description,
+                            Required = isRequired
+                        };
+                    }
+                }
+                else
+                {
+                    // For dictionaries or types with no properties, treat as opaque object
+                    schema.Properties[returnTypeName] = new ParameterDescriptor
+                    {
+                        Type = "object",
+                        Description = "Result of the operation",
+                        Required = true
+                    };
+                }
+            }
+            
+            // Ensure there's always a result property in the output schema
+            if (schema.Properties.Count == 0)
+            {
+                schema.Properties["result"] = new ParameterDescriptor
+                {
+                    Type = "object",
+                    Description = "Result of the operation",
+                    Required = true
+                };
+            }
+            
+            return schema;
+        }
+        
+        /// <summary>
+        /// Create a tool descriptor from a container method
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        /// <param name="method">Method with MCPTool attribute</param>
+        /// <param name="toolAttr">Tool attribute</param>
+        /// <param name="namePrefix">Name prefix from container</param>
+        /// <returns>Tool descriptor</returns>
+        public static ToolDescriptor CreateToolDescriptorFromMethod(Type containerType, MethodInfo method, MCPToolAttribute toolAttr, string namePrefix = "")
+        {
+            if (toolAttr == null)
+            {
+                return null;
+            }
+            
+            // Derive name from attribute or method name with prefix
+            string toolName = toolAttr.Name;
+            if (string.IsNullOrEmpty(toolName))
+            {
+                // Convert method name to snake_case
+                toolName = ConvertCamelCaseToSnakeCase(method.Name);
+            }
+            
+            // Apply prefix if available
+            if (!string.IsNullOrEmpty(namePrefix) && !toolName.StartsWith(namePrefix))
+            {
+                toolName = $"{namePrefix}_{toolName}";
+            }
+            
+            // Create the tool descriptor
+            var descriptor = new ToolDescriptor
+            {
+                Name = toolName,
+                Description = toolAttr.Description ?? $"Tool for {method.Name}",
+                Example = toolAttr.Example,
+                InputSchema = GetSchemaFromMethodParameters(method),
+                OutputSchema = GetSchemaFromReturnType(method),
+                MethodInfo = method,
+                ContainerType = containerType
+            };
+            
+            return descriptor;
+        }
+        
+        /// <summary>
+        /// Create a resource descriptor from a container method
+        /// </summary>
+        /// <param name="containerType">Container class type</param>
+        /// <param name="method">Method with MCPResource attribute</param>
+        /// <param name="resourceAttr">Resource attribute</param>
+        /// <param name="namePrefix">Name prefix from container</param>
+        /// <returns>Resource descriptor</returns>
+        public static ResourceDescriptor CreateResourceDescriptorFromMethod(Type containerType, MethodInfo method, MCPResourceAttribute resourceAttr, string namePrefix = "")
+        {
+            if (resourceAttr == null)
+            {
+                return null;
+            }
+            
+            // Derive name from attribute or method name with prefix
+            string resourceName = resourceAttr.Name;
+            if (string.IsNullOrEmpty(resourceName))
+            {
+                // Convert method name to snake_case
+                resourceName = ConvertCamelCaseToSnakeCase(method.Name);
+            }
+            
+            // Apply prefix if available
+            if (!string.IsNullOrEmpty(namePrefix) && !resourceName.StartsWith(namePrefix))
+            {
+                resourceName = $"{namePrefix}_{resourceName}";
+            }
+            
+            // Get URL pattern from attribute or generate default
+            string urlPattern = resourceAttr.UrlPattern;
+            if (string.IsNullOrEmpty(urlPattern))
+            {
+                urlPattern = $"unity://{resourceName}";
+                
+                // Add parameter placeholders to URL pattern for method parameters
+                var methodParameters = method.GetParameters();
+                if (methodParameters.Length > 0)
+                {
+                    foreach (var param in methodParameters)
+                    {
+                        urlPattern += $"/{{{param.Name}}}";
+                    }
+                }
+            }
+            
+            // Create the resource descriptor
+            var descriptor = new ResourceDescriptor
+            {
+                Name = resourceName,
+                Description = resourceAttr.Description ?? $"Resource for {method.Name}",
+                UrlPattern = urlPattern,
+                Example = resourceAttr.Example,
+                OutputSchema = GetSchemaFromReturnType(method),
+                MethodInfo = method,
+                ContainerType = containerType
+            };
+            
+            // Get parameters from URL pattern
+            var parameters = new Dictionary<string, ParameterDescriptor>();
+            var urlParts = urlPattern.Split('/');
+            
+            foreach (var part in urlParts)
+            {
+                if (part.StartsWith("{") && part.EndsWith("}"))
+                {
+                    var paramName = part.Substring(1, part.Length - 2);
+                    string paramType = "string";
+                    string description = $"Parameter {paramName} for this resource";
+                    bool isRequired = true;
+                    
+                    // Look for matching parameter in method
+                    var methodParams = method.GetParameters();
+                    foreach (var methodParam in methodParams)
+                    {
+                        if (methodParam.Name.Equals(paramName, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            paramType = GetTypeString(methodParam.ParameterType);
+                            isRequired = !methodParam.IsOptional;
+                            
+                            // Check for parameter attribute
+                            var paramAttr = methodParam.GetCustomAttribute<MCPParameterAttribute>();
+                            if (paramAttr != null)
+                            {
+                                description = paramAttr.Description ?? description;
+                                paramType = paramAttr.Type ?? paramType;
+                                isRequired = paramAttr.Required;
+                            }
+                            
+                            break;
+                        }
+                    }
+                    
+                    parameters[paramName] = new ParameterDescriptor
+                    {
+                        Type = paramType,
+                        Description = description,
+                        Required = isRequired
+                    };
+                }
+            }
+            
+            descriptor.Parameters = parameters;
+            
+            return descriptor;
+        }
     }
 }

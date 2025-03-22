@@ -2,10 +2,12 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using YetAnotherUnityMcp.Editor.Commands;
+using YetAnotherUnityMcp.Editor.Models;
 using YetAnotherUnityMcp.Editor.Net;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
+using YetAnotherUnityMcp.Editor.Containers;
 
 namespace YetAnotherUnityMcp.Editor
 {
@@ -384,7 +386,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                var result = ExecuteCodeCommand.Execute(codeToExecute);
+                var result = Commands.EditorMcpContainer.ExecuteCode(codeToExecute);
                 lastResponse = $"Result: {result}";
                 lastError = "";
             }
@@ -400,7 +402,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                var result = TakeScreenshotCommand.Execute(screenshotPath, screenshotResolution.x, screenshotResolution.y);
+                var result = Commands.EditorMcpContainer.TakeScreenshot(screenshotPath, screenshotResolution.x, screenshotResolution.y);
                 lastResponse = $"Screenshot saved: {result}";
                 lastError = "";
             }
@@ -425,7 +427,7 @@ namespace YetAnotherUnityMcp.Editor
                     value = floatValue;
                 }
                 
-                var result = ModifyObjectCommand.Execute(objectId, propertyName, value);
+                var result = Commands.ObjectMcpContainer.ModifyObject(objectId, propertyName, value);
                 lastResponse = $"Object modified: {result}";
                 lastError = "";
             }
@@ -441,7 +443,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                var result = GetLogsCommand.Execute(100);
+                var result = YaumSpecificMcpContainer.GetLogs(100);
                 lastResponse = $"Logs: {result}";
                 lastError = "";
             }
@@ -457,7 +459,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                var result = GetUnityInfoCommand.Execute();
+                var result = YaumSpecificMcpContainer.GetUnityInfo();
                 lastResponse = $"Unity info: {result}";
                 lastError = "";
             }
