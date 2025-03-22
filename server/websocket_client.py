@@ -555,6 +555,11 @@ class UnityTcpClient:
                     if message == PONG_RESPONSE:
                         logger.debug("Received PONG")
                         continue
+                    elif message == PING_MESSAGE:
+                        # Respond to PING with PONG
+                        logger.debug("Received PING, responding with PONG")
+                        await self._send_frame(PONG_RESPONSE)
+                        continue
                     
                     try:
                         # Parse the message
