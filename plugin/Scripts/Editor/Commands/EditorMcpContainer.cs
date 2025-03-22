@@ -70,16 +70,30 @@ namespace YetAnotherUnityMcp.Runtime
                     GenerateInMemory = true,
                     GenerateExecutable = false
                 };
-                
+
+            
                 // Add references to Unity assemblies
-                parameters.ReferencedAssemblies.Add(typeof(GameObject).Assembly.Location);
-                parameters.ReferencedAssemblies.Add(typeof(Debug).Assembly.Location);
-                parameters.ReferencedAssemblies.Add(typeof(System.Linq.Enumerable).Assembly.Location);
-                parameters.ReferencedAssemblies.Add(typeof(List<>).Assembly.Location);
-                parameters.ReferencedAssemblies.Add(typeof(EditorWindow).Assembly.Location);
+                var assemblies = new List<string>() {
+                    typeof(UnityEngine.Object).Assembly.Location,
+                    typeof(GameObject).Assembly.Location,
+                    typeof(Debug).Assembly.Location,
+                    typeof(EditorWindow).Assembly.Location,
+                    typeof(UnityEditor.Editor).Assembly.Location,
+                    FindUnityModule("System.Core"),
+                    FindUnityModule("netstandard"),
+                    FindUnityModule("UnityEngine.UI"),
+                    FindUnityModule("UnityEngine.CoreModule"),
+                    FindUnityModule("UnityEngine.UIModule"),
+                    FindUnityModule("UnityEngine.InputModule"),
+                    FindUnityModule("UnityEngine.IMGUIModule"),
+                };
+
+                assemblies = assemblies.Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
+                foreach (var assemblyPath in assemblies)
+                    parameters.ReferencedAssemblies.Add(assemblyPath);
                 
                 // Compile the code
-                CSharpCodeProvider provider = new CSharpCodeProvider();
+                using CSharpCodeProvider provider = new CSharpCodeProvider();
                 CompilerResults results = provider.CompileAssemblyFromSource(parameters, codeToCompile);
                 
                 // Check for compilation errors
@@ -87,9 +101,8 @@ namespace YetAnotherUnityMcp.Runtime
                 {
                     StringBuilder errorMessage = new StringBuilder("Compilation errors occurred:\n");
                     foreach (CompilerError error in results.Errors)
-                    {
                         errorMessage.AppendLine($"Line {error.Line}: {error.ErrorText}");
-                    }
+                    
                     return errorMessage.ToString();
                 }
                 
@@ -107,6 +120,20 @@ namespace YetAnotherUnityMcp.Runtime
             }
         }
         
+        private static string FindUnityModule(string moduleName)
+        {
+            try
+            {
+                return AppDomain.CurrentDomain.GetAssemblies()
+                    .FirstOrDefault(a => a.GetName().Name == moduleName).Location;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to add Unity module {moduleName}: {ex.Message}");
+                return null;
+            }
+        }
+
         #endregion
         
         #region Screenshots

@@ -1,13 +1,10 @@
 using System.Collections;
 using UnityEditor;
 using UnityEngine;
-using YetAnotherUnityMcp.Editor.Commands;
-using YetAnotherUnityMcp.Editor.Models;
-using YetAnotherUnityMcp.Editor.Net;
-using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using YetAnotherUnityMcp.Editor.Containers;
+using YetAnotherUnityMcp.Editor.Net;
 
 namespace YetAnotherUnityMcp.Editor
 {
@@ -38,7 +35,7 @@ namespace YetAnotherUnityMcp.Editor
             EditorApplication.quitting += () => 
             {
                 Debug.Log("[MCP Server] Unity Editor shutting down, stopping TCP server...");
-                _ = MCPTcpServer.Instance.StopAsync();
+                _ = MCPTcpServer.Instance.StopAsync("Server stopped by Unity Editor");
             };
             
             // Log initialization
@@ -325,7 +322,7 @@ namespace YetAnotherUnityMcp.Editor
             
             try
             {
-                await MCPTcpServer.Instance.StopAsync();
+                await MCPTcpServer.Instance.StopAsync("Server stopped by user");
                 lastResponse = "Server stopped";
                 connectedClients.Clear();
             }

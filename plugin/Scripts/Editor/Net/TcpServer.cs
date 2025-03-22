@@ -47,6 +47,7 @@ namespace YetAnotherUnityMcp.Editor.Net
         /// </summary>
         public void RaiseStopped()
         {
+            Debug.Log($"[TCP Server] RaiseStopped");
             OnStopped?.Invoke();
         }
         
@@ -95,6 +96,7 @@ namespace YetAnotherUnityMcp.Editor.Net
         // Performance monitoring
         private int _messageProcessedCount = 0;
         private DateTime _lastPerformanceLog = DateTime.Now;
+        private bool _isStarting;
 
         // Message delimiters and constants
         public const byte START_MARKER = 0x02; // STX (Start of Text)
@@ -119,7 +121,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             EditorApplication.update -= Update;
             
             // Ensure server is stopped
-            StopAsync().GetAwaiter().GetResult();
+            StopAsync("~TcpServer").GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -147,9 +149,17 @@ namespace YetAnotherUnityMcp.Editor.Net
         {
             try
             {
+                if (_isStarting)
+                {
+                    Debug.LogWarning("[TCP Server] Already starting, please wait");
+                    return false;
+                }
+
+                _isStarting = true;
+
                 if (_isRunning)
                 {
-                    await StopAsync();
+                    await StopAsync("restart");
                 }
 
                 _serverUrl = $"tcp://{host}:{port}/";
@@ -184,13 +194,14 @@ namespace YetAnotherUnityMcp.Editor.Net
                 Debug.Log("[TCP Server] Started successfully");
                 RaiseStarted();
                 
+                _isStarting = false;
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[TCP Server] Start error: {ex.Message}");
                 RaiseError($"Start error: {ex.Message}");
                 _isRunning = false;
+                _isStarting = false;
                 return false;
             }
         }
@@ -198,10 +209,14 @@ namespace YetAnotherUnityMcp.Editor.Net
         /// <summary>
         /// Stop the TCP server
         /// </summary>
-        public async Task StopAsync()
+        public async Task StopAsync(string reason = null)
         {
+            Debug.Log($"[TCP Server] Stopping...({reason})");
             if (!_isRunning || _listener == null)
+            {
+                Debug.Log("[TCP Server] Cannot stop: Server not running");
                 return;
+            }
 
             try
             {

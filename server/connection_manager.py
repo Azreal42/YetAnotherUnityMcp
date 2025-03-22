@@ -24,8 +24,7 @@ import logging
 import time
 from typing import List, Optional, Callable, Dict, Any
 from fastapi import WebSocket
-from server.unity_socket_client import get_client
-
+from server.unity_tcp_client import get_client
 logger = logging.getLogger("mcp_server")
 
 # Server-side connection manager for FastAPI WebSockets (DEPRECATED)
@@ -148,7 +147,7 @@ class UnityConnectionManager:
         # Register event handlers
         self.client.on("disconnected", self._handle_disconnect)
     
-    async def connect(self, url: str = "tcp://localhost:8080/") -> bool:
+    async def connect(self, url: str = "tcp://localhost:666/") -> bool:
         """
         Connect to Unity TCP server with automatic reconnection.
         

@@ -1,10 +1,10 @@
 """Utility functions for Unity client operations"""
 
 import logging
-from typing import Any, Callable, TypeVar, Awaitable, Optional, cast
+from typing import Any, Callable, TypeVar, Awaitable
 from mcp.server.fastmcp import Context
-from server.unity_socket_client import get_client, UnitySocketClient
 from server.connection_manager import get_unity_connection_manager
+from server.unity_tcp_client import UnityTcpClient, get_client
 
 logger = logging.getLogger("unity_client")
 
@@ -12,7 +12,7 @@ T = TypeVar('T')  # Return type
 
 async def execute_unity_operation(
     operation_name: str,
-    operation: Callable[[UnitySocketClient], Awaitable[T]],
+    operation: Callable[[UnityTcpClient], Awaitable[T]],
     ctx: Context,
     error_prefix: str = "Error"
 ) -> T:

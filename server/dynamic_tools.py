@@ -7,8 +7,8 @@ import re
 from typing import Any, Dict, List, Optional, Callable, Awaitable, Set
 
 from mcp.server.fastmcp import FastMCP, Context
-from server.unity_socket_client import UnitySocketClient, get_client
 from server.unity_client_util import execute_unity_operation
+from server.unity_tcp_client import get_client
 
 logger = logging.getLogger("dynamic_tools")
 

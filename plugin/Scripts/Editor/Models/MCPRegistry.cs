@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Newtonsoft.Json;
 using System.Reflection;
-using YetAnotherUnityMcp.Editor.Commands;
 
 namespace YetAnotherUnityMcp.Editor.Models
 {
@@ -67,35 +65,6 @@ namespace YetAnotherUnityMcp.Editor.Models
             return _schema.Tools.Find(t => t.Name == toolName);
         }
         
-        /// <summary>
-        /// Get the type with MCPResource attribute matching a resource name
-        /// </summary>
-        /// <param name="resourceName">Name of the resource</param>
-        /// <returns>Type of the resource handler or null if not found</returns>
-        public Type GetResourceHandlerType(string resourceName)
-        {
-            return Assembly.GetExecutingAssembly()
-                .GetTypes()
-                .FirstOrDefault(t => {
-                    var attr = t.GetCustomAttribute<MCPResourceAttribute>();
-                    return attr != null && attr.Name == resourceName;
-                });
-        }
-        
-        /// <summary>
-        /// Get the type with MCPTool attribute matching a tool name
-        /// </summary>
-        /// <param name="toolName">Name of the tool</param>
-        /// <returns>Type of the tool handler or null if not found</returns>
-        public Type GetToolHandlerType(string toolName)
-        {
-            return Assembly.GetExecutingAssembly()
-                .GetTypes()
-                .FirstOrDefault(t => {
-                    var attr = t.GetCustomAttribute<MCPToolAttribute>();
-                    return attr != null && attr.Name == toolName;
-                });
-        }
         
         /// <summary>
         /// Register a tool
@@ -156,7 +125,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             try
             {
                 // Get all types from the assembly
-                var types = assembly.GetTypes();
+                var types = assembly.GetTypes().Where(t => t.IsClass && t.GetCustomAttribute<MCPContainerAttribute>() != null);
                 
                 foreach (var type in types)
                 {
@@ -166,20 +135,6 @@ namespace YetAnotherUnityMcp.Editor.Models
                     {
                         // Scan methods in container for tool/resource attributes
                         RegisterMethodsFromContainer(type, containerAttr);
-                    }
-                    // Check if the type has the MCPTool attribute (legacy class-based)
-                    else if (type.GetCustomAttribute<MCPToolAttribute>() != null)
-                    {
-                        // Check if it's a command class (ends with "Command")
-                        if (type.Name.EndsWith("Command"))
-                        {
-                            RegisterCommandFromType(type);
-                        }
-                        else
-                        {
-                            // Otherwise, it's a model-based tool
-                            RegisterToolFromType(type);
-                        }
                     }
                 }
             }
@@ -336,39 +291,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             }
         }
         
-        /// <summary>
-        /// Register a command class as a tool using reflection and introspection
-        /// </summary>
-        /// <param name="type">Command class type</param>
-        private void RegisterCommandFromType(Type type)
-        {
-            try
-            {
-                ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromCommandType(type);
-                if (descriptor != null)
-                {
-                    RegisterTool(descriptor);
-                    Debug.Log($"[MCPRegistry] Registered command class {type.Name} as tool {descriptor.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[MCPRegistry] Error registering command {type.Name}: {ex.Message}");
-            }
-        }
-        
-        /// <summary>
-        /// Register a tool descriptor from a model type using reflection and attributes
-        /// </summary>
-        /// <param name="type">Type to create tool descriptor from</param>
-        private void RegisterToolFromType(Type type)
-        {
-            ToolDescriptor descriptor = MCPAttributeUtil.CreateToolDescriptorFromType(type);
-            if (descriptor != null)
-            {
-                RegisterTool(descriptor);
-            }
-        }
+
 
         /// <summary>
         /// Register built-in resources

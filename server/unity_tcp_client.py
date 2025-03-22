@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, Any, Optional, List, Union, Callable
-from server.websocket_client import LowLevelTcpClient
+from server.low_level_tcp_client import LowLevelTcpClient
 
 logger = logging.getLogger("unity_client")
 

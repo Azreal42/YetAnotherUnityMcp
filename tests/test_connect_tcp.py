@@ -4,7 +4,7 @@ import json
 import time
 import sys
 
-from server.websocket_client import UnityTcpClient
+from server.low_level_tcp_client import UnityTcpClient
 
 # Configure more detailed logging for debugging
 logging.basicConfig(

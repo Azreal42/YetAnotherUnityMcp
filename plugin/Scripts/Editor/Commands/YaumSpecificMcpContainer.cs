@@ -11,14 +11,15 @@ namespace YetAnotherUnityMcp.Editor.Containers
     /// <summary>
     /// MCP Container for scene-related functionality
     /// </summary>
-    [MCPContainer("scene", "Scene-related tools and resources")]
+    [MCPContainer("global", "Scene-related tools and resources")]
     public static class YaumSpecificMcpContainer
     {
     /// <summary>
     /// Get information about the Unity environment
     /// </summary>
     /// <returns>JSON string with Unity information</returns>
-        [MCPResource("unity_info", "Get information about the Unity environment", "unity://info", "unity://info")]
+        //[MCPResource("unity_info", "Get information about the Unity environment", "unity://info", "unity://info")]
+        [MCPTool("unity_info", "Get information about the Unity environment")]
         public static string GetUnityInfo()
         {
             try
@@ -82,11 +83,6 @@ namespace YetAnotherUnityMcp.Editor.Containers
             }
         }
 
-        /// <summary>
-        /// Get information about all registered tools and resources
-        /// </summary>
-        /// <returns>JSON string describing all tools and resources</returns>
-        [MCPResource("unity_schema", "Get information about available tools and resources", "unity://schema", "unity://schema")]
         public static string GetSchema()
         {
             try
@@ -116,7 +112,7 @@ namespace YetAnotherUnityMcp.Editor.Containers
         /// </summary>
         /// <param name="maxLogs">Maximum number of logs to return</param>
         /// <returns>JSON string with logs</returns>
-        [MCPResource("unity_logs", "Get logs from the Unity Editor console", "unity://logs/{max_logs}", "unity://logs/50")]
+        [MCPTool("unity_logs", "Get logs from the Unity Editor console")]
         public static string GetLogs(
             [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100)
         {

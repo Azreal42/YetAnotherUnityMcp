@@ -42,7 +42,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                await MCPTcpServer.Instance.StopAsync();
+                await MCPTcpServer.Instance.StopAsync("Server stopped by user");
                 Debug.Log("[MCP Menu] Server stopped");
             }
             catch (Exception ex)

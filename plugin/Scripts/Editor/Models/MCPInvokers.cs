@@ -39,55 +39,27 @@ namespace YetAnotherUnityMcp.Editor.Models
             }
             
             // Check if this is a method-based resource
-            if (resourceDescriptor.MethodInfo != null && resourceDescriptor.ContainerType != null)
+            if (resourceDescriptor.MethodInfo == null || resourceDescriptor.ContainerType == null)
             {
-                Debug.Log($"[ResourceInvoker] Using container method for resource: {resourceName}");
-                
-                // Get the method info
-                var methodInfo = resourceDescriptor.MethodInfo;
-                var containerType = resourceDescriptor.ContainerType;
-                
-                // Map parameters
-                var containerMethodParams = methodInfo.GetParameters();
-                var containerArgs = MapParameters(containerMethodParams, parameters);
-                
-                // Invoke the method
-                Debug.Log($"[ResourceInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
-                object result = methodInfo.Invoke(null, containerArgs);
-                Debug.Log($"[ResourceInvoker] Resource {resourceName} invoked successfully");
-                
-                return result;
+                throw new ArgumentException($"Resource {resourceName} is not a method-based resource");
             }
+
+            Debug.Log($"[ResourceInvoker] Using container method for resource: {resourceName}");
             
-            // Legacy path - class-based resource
-            Debug.Log($"[ResourceInvoker] Using legacy class handler for resource: {resourceName}");
-            
-            // Find the resource handler type
-            var handlerType = registry.GetResourceHandlerType(resourceName);
-            if (handlerType == null)
-            {
-                throw new ArgumentException($"No handler type found for resource: {resourceName}");
-            }
-            
-            Debug.Log($"[ResourceInvoker] Found handler type: {handlerType.Name}");
-            
-            // Get the GetResource method
-            var getResourceMethod = handlerType.GetMethod("GetResource", BindingFlags.Public | BindingFlags.Static);
-            if (getResourceMethod == null)
-            {
-                throw new ArgumentException($"Resource handler {handlerType.Name} does not have a GetResource method");
-            }
+            // Get the method info
+            var methodInfo = resourceDescriptor.MethodInfo;
+            var containerType = resourceDescriptor.ContainerType;
             
             // Map parameters
-            var resourceMethodParams = getResourceMethod.GetParameters();
-            var resourceArgs = MapParameters(resourceMethodParams, parameters);
+            var containerMethodParams = methodInfo.GetParameters();
+            var containerArgs = MapParameters(containerMethodParams, parameters);
             
             // Invoke the method
-            Debug.Log($"[ResourceInvoker] Invoking {handlerType.Name}.GetResource");
-            object getResourceResult = getResourceMethod.Invoke(null, resourceArgs);
+            Debug.Log($"[ResourceInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
+            object result = methodInfo.Invoke(null, containerArgs);
             Debug.Log($"[ResourceInvoker] Resource {resourceName} invoked successfully");
             
-            return getResourceResult;
+            return result;
         }
         
         /// <summary>
@@ -196,55 +168,27 @@ namespace YetAnotherUnityMcp.Editor.Models
             }
             
             // Check if this is a method-based tool
-            if (toolDescriptor.MethodInfo != null && toolDescriptor.ContainerType != null)
+            if (toolDescriptor.MethodInfo == null || toolDescriptor.ContainerType == null)
             {
-                Debug.Log($"[ToolInvoker] Using container method for tool: {toolName}");
-                
-                // Get the method info
-                var methodInfo = toolDescriptor.MethodInfo;
-                var containerType = toolDescriptor.ContainerType;
-                
-                // Map parameters
-                var containerToolParams = methodInfo.GetParameters();
-                var containerArgs = ResourceInvoker.MapParameters(containerToolParams, parameters);
-                
-                // Invoke the method
-                Debug.Log($"[ToolInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
-                object result = methodInfo.Invoke(null, containerArgs);
-                Debug.Log($"[ToolInvoker] Tool {toolName} invoked successfully");
-                
-                return result;
+                throw new ArgumentException($"Tool {toolName} is not a method-based tool");
             }
+
+            Debug.Log($"[ToolInvoker] Using container method for tool: {toolName}");
             
-            // Legacy path - class-based tool
-            Debug.Log($"[ToolInvoker] Using legacy class handler for tool: {toolName}");
-            
-            // Find the tool handler type
-            var handlerType = registry.GetToolHandlerType(toolName);
-            if (handlerType == null)
-            {
-                throw new ArgumentException($"No handler type found for tool: {toolName}");
-            }
-            
-            Debug.Log($"[ToolInvoker] Found handler type: {handlerType.Name}");
-            
-            // Get the Execute method
-            var executeMethod = handlerType.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
-            if (executeMethod == null)
-            {
-                throw new ArgumentException($"Tool handler {handlerType.Name} does not have an Execute method");
-            }
+            // Get the method info
+            var methodInfo = toolDescriptor.MethodInfo;
+            var containerType = toolDescriptor.ContainerType;
             
             // Map parameters
-            var executeMethodParams = executeMethod.GetParameters();
-            var executeArgs = ResourceInvoker.MapParameters(executeMethodParams, parameters);
+            var containerToolParams = methodInfo.GetParameters();
+            var containerArgs = ResourceInvoker.MapParameters(containerToolParams, parameters);
             
             // Invoke the method
-            Debug.Log($"[ToolInvoker] Invoking {handlerType.Name}.Execute");
-            object executeResult = executeMethod.Invoke(null, executeArgs);
+            Debug.Log($"[ToolInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
+            object result = methodInfo.Invoke(null, containerArgs);
             Debug.Log($"[ToolInvoker] Tool {toolName} invoked successfully");
             
-            return executeResult;
+            return result;
         }
     }
 }
