@@ -337,5 +337,264 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.IsNotNull(result);
             Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
         }
+        
+        /// <summary>
+        /// Test ToolInvoker with args parameter
+        /// </summary>
+        [Test]
+        public void ToolInvoker_WithArgs_ThrowsExceptionForMissingParam2()
+        {
+            // Arrange - using positional args (only one parameter where two are required)
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", "test_value" } // Single arg as string
+            };
+            
+            // Act & Assert
+            // This should throw an exception because param2 is required and not provided
+            Assert.Throws<ArgumentException>(() => 
+                ToolInvoker.InvokeTool("tool_with_params", parameters)
+            );
+        }
+        
+        /// <summary>
+        /// Test ToolInvoker with args parameter using a tool with optional parameters
+        /// </summary>
+        [Test]
+        public void ToolInvoker_WithArgs_HandlesOptionalParameters()
+        {
+            // We need to register a tool with optional parameters for this test
+            var methodInfo = typeof(TestResourceWithDefault).GetMethod("GetResource");
+            var toolDescriptor = new ToolDescriptor
+            {
+                Name = "tool_with_optional",
+                Description = "Test tool with optional parameter",
+                Example = "tool_with_optional()",
+                ContainerType = typeof(TestResourceWithDefault),
+                MethodInfo = methodInfo,
+                InputSchema = new InputSchema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "param1", new ParameterDescriptor { Description = "Parameter with default value", Type = "string", Required = false } }
+                    }
+                },
+                OutputSchema = new Schema()
+            };
+            MCPRegistry.Instance.RegisterTool(toolDescriptor);
+            
+            // Arrange - using no args for a tool with optional parameters
+            var parameters = new Dictionary<string, object>();
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_optional", parameters);
+            
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"default_value\"}", result);
+        }
+        
+        /// <summary>
+        /// Test ToolInvoker with args array
+        /// </summary>
+        [Test]
+        public void ToolInvoker_WithArgsArray_PassesParametersCorrectly()
+        {
+            // Arrange - using positional args as JArray
+            var jsonArray = Newtonsoft.Json.Linq.JArray.FromObject(new object[] { "test_value", 42 });
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", jsonArray }
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_params", parameters);
+            
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
+        }
+        
+        /// <summary>
+        /// Test ToolInvoker with kwargs parameter
+        /// </summary>
+        [Test]
+        public void ToolInvoker_WithKwargs_PassesParametersCorrectly()
+        {
+            // Arrange - using kwargs as JObject
+            var dict = new Dictionary<string, object>
+            {
+                { "param1", "test_value" },
+                { "param2", 42 }
+            };
+            var jObject = Newtonsoft.Json.Linq.JObject.FromObject(dict);
+            var parameters = new Dictionary<string, object>
+            {
+                { "kwargs", jObject }
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_params", parameters);
+            
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
+        }
+        
+        /// <summary>
+        /// Test ToolInvoker with mixed args and kwargs
+        /// </summary>
+        [Test]
+        public void ToolInvoker_WithMixedArgsAndKwargs_PassesParametersCorrectly()
+        {
+            // Arrange - using both args and kwargs
+            var dict = new Dictionary<string, object>
+            {
+                { "param2", 42 } // Only provide param2 in kwargs
+            };
+            var jObject = Newtonsoft.Json.Linq.JObject.FromObject(dict);
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", "test_value" }, // param1 as positional arg
+                { "kwargs", jObject }      // param2 as kwarg
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_params", parameters);
+            
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
+        }
+        
+        /// <summary>
+        /// Test mapping string args to first parameter (like the editor_execute_code command)
+        /// </summary>
+        [Test]
+        public void StringArgs_ShouldMapToFirstParameter()
+        {
+            // Define a tool with param1, param2 like most tools would have
+            var toolMethod = typeof(TestResourceWithParams).GetMethod("GetResource"); 
+            var toolDescriptor = new ToolDescriptor
+            {
+                Name = "execute_with_code",
+                Description = "Command with code as first parameter",
+                Example = "execute_with_code(code, 42)",
+                ContainerType = typeof(TestResourceWithParams),
+                MethodInfo = toolMethod,
+                InputSchema = new InputSchema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "param1", new ParameterDescriptor { Description = "Code to execute", Type = "string", Required = true } },
+                        { "param2", new ParameterDescriptor { Description = "Some number", Type = "number", Required = true } }
+                    }
+                },
+                OutputSchema = new Schema()
+            };
+            MCPRegistry.Instance.RegisterTool(toolDescriptor);
+            
+            // Arrange - Using just a string as args with a second param in kwargs
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", "Debug.Log(\"Hello from cursor\");" },
+                { "kwargs", Newtonsoft.Json.Linq.JObject.FromObject(new Dictionary<string, object> {
+                    { "param2", 42 }
+                })}
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("execute_with_code", parameters);
+            
+            // Assert - The string should map to param1 (first parameter)
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"Debug.Log(\\\"Hello from cursor\\\");\", \"param2\": 42}", result);
+        }
+        
+        /// <summary>
+        /// Test with single string argument for commands like editor_execute_code
+        /// </summary>
+        [Test]
+        public void SingleStringArg_NoKwargs_ShouldWorkForSimpleCommands()
+        {
+            // Define a one-parameter tool like editor_execute_code
+            var codeToolMethod = typeof(TestResourceWithDefault).GetMethod("GetResource");
+            var codeToolDescriptor = new ToolDescriptor
+            {
+                Name = "editor_execute_code",
+                Description = "Execute code in editor",
+                Example = "editor_execute_code(\"Debug.Log('Hello')\")",
+                ContainerType = typeof(TestResourceWithDefault),
+                MethodInfo = codeToolMethod,
+                InputSchema = new InputSchema
+                {
+                    Properties = new Dictionary<string, ParameterDescriptor>
+                    {
+                        { "param1", new ParameterDescriptor { Description = "Code to execute", Type = "string", Required = false } }
+                    }
+                },
+                OutputSchema = new Schema()
+            };
+            MCPRegistry.Instance.RegisterTool(codeToolDescriptor);
+            
+            // Arrange - Using just the args format with a string
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", "Debug.Log(\"Hello from cursor\");" },
+                { "kwargs", new Dictionary<string, object>() } // Empty kwargs
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("editor_execute_code", parameters);
+            
+            // Assert - The string should map to param1
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"Debug.Log(\\\"Hello from cursor\\\");\"}", result);
+        }
+        
+        /// <summary>
+        /// Test array args mapping to parameters in order
+        /// </summary>
+        [Test]
+        public void ArrayArgs_ShouldMapToParametersInOrder()
+        {
+            // Arrange - Using positional args as array for tool_with_params
+            var jArray = Newtonsoft.Json.Linq.JArray.FromObject(new object[] { "test_value", 42 });
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", jArray }
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_params", parameters);
+            
+            // Assert - Should map "test_value" to param1 and 42 to param2
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
+        }
+        
+        /// <summary>
+        /// Test kwargs overriding args when both are provided
+        /// </summary>
+        [Test]
+        public void KwargsOverrideArgsWhenBothProvided()
+        {
+            // Arrange - conflicting value for param1
+            var parameters = new Dictionary<string, object>
+            {
+                { "args", "original_value" }, // This would normally go to param1
+                { "kwargs", Newtonsoft.Json.Linq.JObject.FromObject(new Dictionary<string, object> {
+                    { "param1", "override_value" }, // This should override the args value
+                    { "param2", 42 }
+                })}
+            };
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("tool_with_params", parameters);
+            
+            // Assert - kwargs value should win
+            Assert.IsNotNull(result);
+            Assert.AreEqual("{\"param1\": \"override_value\", \"param2\": 42}", result);
+        }
     }
 }

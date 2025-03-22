@@ -109,8 +109,9 @@ class LowLevelTcpClient:
                 else:
                     logger.error("Handshake failed")
                     # Close connection and retry
-                    self.writer.close()
-                    await self.writer.wait_closed()
+                    if self.writer:
+                        self.writer.close()
+                        await self.writer.wait_closed()
                     self.reader = None
                     self.writer = None
             except Exception as e:
@@ -264,7 +265,7 @@ class LowLevelTcpClient:
             
             while bytes_checked < 1000:  # Reasonable limit to avoid infinite loop
                 try:
-                    b = await asyncio.wait_for(self.reader.readexactly(1), timeout=0.5)
+                    b = await asyncio.wait_for(self.reader.readexactly(1), timeout=5)
                     bytes_checked += 1
                     
                     # Store initial bytes for debugging (up to 16 bytes)

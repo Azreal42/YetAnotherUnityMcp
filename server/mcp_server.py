@@ -23,7 +23,7 @@ logger = logging.getLogger("mcp_server")
 async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     """
     Lifespan manager for MCP server.
-    Handles WebSocket client initialization and cleanup.
+    Handles TCP client initialization and cleanup.
     
     Args:
         server: The FastMCP server instance (not used, but required by FastMCP)
@@ -31,7 +31,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     Yields:
         Empty dictionary for state (not used)
     """
-    logger.info("Server starting: initializing Unity WebSocket client...")
+    logger.info(rf"Server starting: initializing Unity TCP client...{server}")
     
     try:
         from server.dynamic_tools import get_manager
@@ -47,21 +47,21 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
             await register_dynamic_tools(dynamic_manager)
         connection_manager.add_connection_listener(connected_callback)
 
-        # Connect to Unity WebSocket server
+        # Connect to Unity TCP server
         if await connection_manager.connect():
-            logger.info("Unity WebSocket client successfully connected")
+            logger.info("Unity TCP client successfully connected")
         else:
-            logger.warning("Unity WebSocket client failed to connect, MCP functions may not work")
+            logger.warning("Unity TCP client failed to connect, MCP functions may not work")
             logger.info("Auto-reconnection is enabled, the client will try to reconnect automatically")
         
         # Yield to the server (FastMCP will run during this time)
         yield {}
     finally:
         # Clean up when the server stops
-        logger.info("Server stopping: disconnecting Unity WebSocket client...")
+        logger.info("Server stopping: disconnecting Unity TCP client...")
         connection_manager = get_unity_connection_manager()
         await connection_manager.disconnect()
-        logger.info("Unity WebSocket client disconnected")
+        logger.info("Unity TCP client disconnected")
 
 async def register_dynamic_tools(dynamic_manager: DynamicToolManager):
     """

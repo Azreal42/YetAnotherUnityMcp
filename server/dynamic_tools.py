@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Callable, Awaitable, Set
 
+from mcp.server.fastmcp.tools import Tool
+from mcp.server.fastmcp.utilities.func_metadata import func_metadata
 from mcp.server.fastmcp import FastMCP, Context
 from server.unity_client_util import execute_unity_operation
 from server.unity_tcp_client import get_client
@@ -117,7 +119,7 @@ class DynamicToolManager:
                 await ctx.info(f"Executing dynamic tool {tool_name} with params: {json.dumps(params)}")
                 result = await execute_unity_operation(
                     f"dynamic tool {tool_name}",
-                    lambda client: client.send_command(tool_name, params),
+                    lambda: self.client.send_command(tool_name, params),
                     ctx,
                     f"Error executing {tool_name}"
                 )
@@ -127,8 +129,17 @@ class DynamicToolManager:
                 raise
                 
         # Register the tool with FastMCP
-        decorated = self.mcp.tool(name=tool_name, description=description)
-        final_func = decorated(dynamic_tool)
+        self.mcp_tool = Tool.from_function(dynamic_tool, name=tool_name, description=description)
+        #input_schema = tool_schema.get('inputSchema', {})
+        # properties = input_schema.get('properties', {})
+        # self.mcp_tool = Tool(fn=dynamic_tool,
+        #                      name=tool_name,
+        #                      description=description,
+        #                      parameters=properties,
+        #                      fn_metadata=func_metadata(dynamic_tool),
+        #                      is_async=True,
+        #                      context_kwarg=None)
+        self.mcp._tool_manager._tools[tool_name] = self.mcp_tool
         
         # Store reference to the registered tool
         self.registered_tools[tool_name] = description
@@ -189,7 +200,7 @@ class DynamicToolManager:
                 # Execute using the unified access_resource command
                 result = await execute_unity_operation(
                     f"dynamic resource {resource_name}",
-                    lambda client: client.send_command("access_resource", {
+                    lambda : self.client.send_command("access_resource", {
                         "resource_name": resource_name,
                         "parameters": parameters
                     }),

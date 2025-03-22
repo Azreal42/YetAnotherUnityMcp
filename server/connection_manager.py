@@ -23,98 +23,8 @@ import asyncio
 import logging
 import time
 from typing import List, Optional, Callable, Dict, Any
-from fastapi import WebSocket
 from server.unity_tcp_client import get_client
 logger = logging.getLogger("mcp_server")
-
-# Server-side connection manager for FastAPI WebSockets (DEPRECATED)
-class ConnectionManager:
-    """
-    DEPRECATED: Server-side connection manager for FastAPI WebSockets.
-    
-    This class is no longer used in the current architecture and will be removed in a future version.
-    It's maintained here for backward compatibility only.
-    """
-    
-    def __init__(self) -> None:
-        warnings.warn(
-            "ConnectionManager is deprecated and unused in the current architecture.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket) -> None:
-        """DEPRECATED: Accept a WebSocket connection."""
-        try:
-            await websocket.accept()
-            self.active_connections.append(websocket)
-            logger.info(f"WebSocket connected. Active connections: {len(self.active_connections)}")
-            # Log the client details
-            client = websocket.client
-            logger.info(f"Client connected from: {client.host}:{client.port}")
-        except Exception as e:
-            logger.error(f"Error accepting WebSocket connection: {str(e)}")
-
-    def disconnect(self, websocket: WebSocket) -> None:
-        """DEPRECATED: Disconnect a WebSocket."""
-        try:
-            if websocket in self.active_connections:
-                self.active_connections.remove(websocket)
-                # Try to get client info before disconnection
-                client_info = "Unknown"
-                try:
-                    if hasattr(websocket, 'client') and websocket.client:
-                        client_info = f"{websocket.client.host}:{websocket.client.port}"
-                except:
-                    pass
-                
-                logger.info(f"WebSocket disconnected from {client_info}. Active connections: {len(self.active_connections)}")
-            else:
-                logger.warning("Attempted to disconnect a WebSocket that was not in active_connections")
-        except Exception as e:
-            logger.error(f"Error during WebSocket disconnection: {str(e)}")
-
-    async def send_message(self, websocket: WebSocket, message: str) -> None:
-        """DEPRECATED: Send a message to a WebSocket client."""
-        try:
-            # Add timing information
-            start_time = time.time()
-            
-            # Log message size
-            logger.debug(f"Sending message of length {len(message)} to client")
-            
-            # Send the message
-            await websocket.send_text(message)
-            
-            # Log the time it took to send
-            elapsed = time.time() - start_time
-            if elapsed > 0.5:  # Log if it took more than 500ms
-                logger.warning(f"Slow message send: {elapsed:.2f}s for {len(message)} bytes")
-        except Exception as e:
-            logger.error(f"Error sending message: {str(e)}")
-
-    async def broadcast(self, message: str) -> None:
-        """DEPRECATED: Broadcast a message to all connected WebSocket clients."""
-        if not self.active_connections:
-            logger.warning("Attempted to broadcast message but no active connections exist")
-            return
-            
-        logger.info(f"Broadcasting message of length {len(message)} to {len(self.active_connections)} clients")
-        
-        failed_connections = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except Exception as e:
-                logger.error(f"Error broadcasting to client: {str(e)}")
-                failed_connections.append(connection)
-        
-        # Remove any connections that failed
-        for failed in failed_connections:
-            if failed in self.active_connections:
-                self.active_connections.remove(failed)
-                logger.warning("Removed failed connection from active_connections")
 
 
 # Client-side connection manager for Unity TCP client
@@ -124,6 +34,7 @@ class UnityConnectionManager:
     """
     
     def __init__(self, 
+                url: str = "tcp://localhost:8080/",
                 reconnect_attempts: int = 5, 
                 reconnect_delay: float = 2.0,
                 auto_reconnect: bool = True):
@@ -135,7 +46,7 @@ class UnityConnectionManager:
             reconnect_delay: Delay between reconnection attempts in seconds
             auto_reconnect: Whether to automatically reconnect on disconnect
         """
-        self.client = get_client()
+        self.client = get_client(url)
         self.reconnect_attempts = reconnect_attempts
         self.reconnect_delay = reconnect_delay
         self.auto_reconnect = auto_reconnect
@@ -147,35 +58,14 @@ class UnityConnectionManager:
         # Register event handlers
         self.client.on("disconnected", self._handle_disconnect)
     
-    async def connect(self, url: str = "tcp://localhost:666/") -> bool:
+    async def connect(self) -> bool:
         """
         Connect to Unity TCP server with automatic reconnection.
-        
-        Args:
-            url: TCP server URL (tcp://host:port/)
             
         Returns:
             True if connected successfully, False otherwise
         """
-        if self.client.connected:
-            logger.info("Already connected to Unity")
-            return True
-            
-        logger.info(f"Connecting to Unity at {url}...")
-        
-        try:
-            result = await self.client.connect()
-            if result:
-                logger.info("Connected to Unity successfully")
-                # Notify connection listeners
-                await self._notify_connection_listeners()
-                return True
-            else:
-                logger.error("Failed to connect to Unity")
-                return False
-        except Exception as e:
-            logger.error(f"Error connecting to Unity: {str(e)}")
-            return False
+        return await self.reconnect()
     
     async def disconnect(self) -> None:
         """

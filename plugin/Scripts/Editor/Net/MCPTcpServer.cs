@@ -349,7 +349,65 @@ namespace YetAnotherUnityMcp.Editor.Net
                         default:
                             Debug.Log($"[MCP TCP Server] Invoking tool {command} with parameters: {JsonConvert.SerializeObject(parameters)}");
                             var toolName = command;
-                            Dictionary<string, object> toolParams = null;
+                            Dictionary<string, object> toolParams = new Dictionary<string, object>();
+                            
+                            // Check for direct parameters in the request
+                            if (parameters != null)
+                            {
+                                // Check for parameters object first (traditional format)
+                                if (parameters.TryGetValue("parameters", out object toolParamsObj))
+                                {
+                                    if (toolParamsObj is Dictionary<string, object> toolParamsDict)
+                                    {
+                                        toolParams = toolParamsDict;
+                                    }
+                                    else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
+                                    {
+                                        // Convert JObject to Dictionary<string, object>
+                                        toolParams = jObject.ToObject<Dictionary<string, object>>();
+                                        Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
+                                    }
+                                    else
+                                    {
+                                        Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
+                                    }
+                                }
+                                
+                                // Check for args/kwargs pattern (directly in parameters)
+                                // Copy args/kwargs to tool parameters if they exist
+                                if (parameters.TryGetValue("args", out object argsObj))
+                                {
+                                    Debug.Log($"[MCP TCP Server] Found args parameter type: {argsObj?.GetType().Name ?? "null"}");
+                                    toolParams["args"] = argsObj;
+                                    
+                                    // Handle string special case (for "args":"value" format)
+                                    if (argsObj is string argsStr)
+                                    {
+                                        Debug.Log($"[MCP TCP Server] Args is string: '{argsStr}'");
+                                    }
+                                    // For JSON array format, properly convert
+                                    else if (argsObj is Newtonsoft.Json.Linq.JArray jArray)
+                                    {
+                                        Debug.Log($"[MCP TCP Server] Args is JArray with {jArray.Count} items");
+                                        string argsJson = jArray.ToString(Newtonsoft.Json.Formatting.None);
+                                        Debug.Log($"[MCP TCP Server] Args JSON: {argsJson}");
+                                    }
+                                }
+                                
+                                if (parameters.TryGetValue("kwargs", out object kwargsObj))
+                                {
+                                    Debug.Log($"[MCP TCP Server] Found kwargs parameter type: {kwargsObj?.GetType().Name ?? "null"}");
+                                    toolParams["kwargs"] = kwargsObj;
+                                    
+                                    // For JSON object format, properly convert
+                                    if (kwargsObj is Newtonsoft.Json.Linq.JObject jObject)
+                                    {
+                                        Debug.Log($"[MCP TCP Server] Kwargs is JObject");
+                                        string kwargsJson = jObject.ToString(Newtonsoft.Json.Formatting.None);
+                                        Debug.Log($"[MCP TCP Server] Kwargs JSON: {kwargsJson}");
+                                    }
+                                }
+                            }
                             
                             if (parameters?.TryGetValue("parameters", out object toolParamsObj) == true)
                             {
@@ -384,8 +442,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                             {
                                 error = ex.Message;
                                 Debug.LogError($"[MCP TCP Server] Error invoking tool {toolName}: {ex.Message}\n{ex.StackTrace}");
-                                }
-
+                            }
                             break;
                     }
                     

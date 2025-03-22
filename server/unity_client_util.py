@@ -30,12 +30,11 @@ async def execute_unity_operation(
     """
     # Get the connection manager for automatic reconnection
     connection_manager = get_unity_connection_manager()
-    client = get_client()
     
     # Execute with automatic reconnection
     async def execute_operation():
         await ctx.info(f"Executing {operation_name}...")
-        return await operation(client)
+        return await operation()
     
     try:
         # Use the connection manager to execute with automatic reconnection

@@ -73,12 +73,106 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             var args = new object[methodParams.Length];
             
+            // Check for args/kwargs pattern
+            bool hasArgs = parameters.TryGetValue("args", out object argsValue);
+            bool hasKwargs = parameters.TryGetValue("kwargs", out object kwargsValue);
+            
+            // If using args/kwargs pattern, build a new parameters dictionary from it
+            Dictionary<string, object> effectiveParams = parameters;
+            
+            if (hasArgs || hasKwargs)
+            {
+                Debug.Log($"[MapParameters] Using args/kwargs pattern");
+                effectiveParams = new Dictionary<string, object>();
+                
+                // Process positional args first
+                if (hasArgs)
+                {
+                    // Handle positional args
+                    List<object> positionalArgs = new List<object>();
+                    
+                    // Handle different types of args value
+                    if (argsValue is string argsStr)
+                    {
+                        // Single arg as string (common case)
+                        positionalArgs.Add(argsStr);
+                        Debug.Log($"[MapParameters] Single arg as string: '{argsStr}'");
+                    }
+                    else if (argsValue is Newtonsoft.Json.Linq.JArray jArray)
+                    {
+                        // Array of args
+                        foreach (var item in jArray)
+                        {
+                            positionalArgs.Add(item.ToObject<object>());
+                        }
+                        Debug.Log($"[MapParameters] JArray args with {positionalArgs.Count} items");
+                    }
+                    else if (argsValue is Newtonsoft.Json.Linq.JValue jValue)
+                    {
+                        // Handle JValue specifically
+                        positionalArgs.Add(jValue.Value);
+                        Debug.Log($"[MapParameters] JValue arg: {jValue.Value}");
+                    }
+                    else if (argsValue is Newtonsoft.Json.Linq.JToken jToken)
+                    {
+                        // Handle other JToken types
+                        positionalArgs.Add(jToken.ToObject<object>());
+                        Debug.Log($"[MapParameters] JToken arg: {jToken}");
+                    }
+                    else if (argsValue != null)
+                    {
+                        // Any other non-null type
+                        positionalArgs.Add(argsValue);
+                        Debug.Log($"[MapParameters] Other arg type: {argsValue.GetType().Name}");
+                    }
+                    
+                    // Map positional args to method parameters in order
+                    if (positionalArgs.Count > 0)
+                    {
+                        for (int i = 0; i < Math.Min(positionalArgs.Count, methodParams.Length); i++)
+                        {
+                            string paramName = methodParams[i].Name;
+                            object argValue = positionalArgs[i];
+                            
+                            Debug.Log($"[MapParameters] Mapping arg[{i}] to param '{paramName}': {argValue}");
+                            effectiveParams[paramName] = argValue;
+                        }
+                    }
+                }
+                
+                // Process keyword args next (these will override positional args if there are conflicts)
+                if (hasKwargs)
+                {
+                    Dictionary<string, object> keywordArgs = new Dictionary<string, object>();
+                    
+                    if (kwargsValue is Newtonsoft.Json.Linq.JObject jObject)
+                    {
+                        // Convert JObject to Dictionary
+                        keywordArgs = jObject.ToObject<Dictionary<string, object>>();
+                        Debug.Log($"[MapParameters] Mapped JObject kwargs with {keywordArgs.Count} entries");
+                    }
+                    else if (kwargsValue is Dictionary<string, object> dict)
+                    {
+                        // Already a Dictionary
+                        keywordArgs = dict;
+                        Debug.Log($"[MapParameters] Using Dictionary kwargs with {keywordArgs.Count} entries");
+                    }
+                    
+                    // Add keyword args to effective parameters (overriding positional args)
+                    foreach (var kvp in keywordArgs)
+                    {
+                        effectiveParams[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            
+            // Now map parameters using the effective parameters (either original or from args/kwargs)
             for (int i = 0; i < methodParams.Length; i++)
             {
                 var paramInfo = methodParams[i];
                 string paramName = paramInfo.Name;
                 
-                if (parameters.TryGetValue(paramName, out object paramValue))
+                if (effectiveParams.TryGetValue(paramName, out object paramValue))
                 {
                     // Handle JObject conversion first
                     if (paramValue is Newtonsoft.Json.Linq.JObject jObject)

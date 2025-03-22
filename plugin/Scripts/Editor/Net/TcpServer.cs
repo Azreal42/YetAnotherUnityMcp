@@ -222,17 +222,17 @@ namespace YetAnotherUnityMcp.Editor.Net
             {
                 _cancellationTokenSource.Cancel();
 
-                // Close all client connections
-                foreach (var connection in _connections.Values)
-                {
-                    await connection.CloseAsync("Server shutting down");
-                }
-                _connections.Clear();
-                
                 // Stop the listener
                 _listener.Stop();
                 _listener = null;
-                
+
+                // Close all client connections
+                foreach (var connection in _connections.Values)
+                {
+                    connection.CloseAsync("Server shutting down").Wait(new TimeSpan(0, 0, 5));
+                }
+                _connections.Clear();
+                                
                 _isRunning = false;
                 Debug.Log("[TCP Server] Stopped");
                 RaiseStopped();
