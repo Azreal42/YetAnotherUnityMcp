@@ -11,7 +11,7 @@ A Unity Master Control Protocol (MCP) implementation that allows AI agents to co
 
 **YetAnotherUnityMcp** is a system that bridges the Unity game engine with AI-driven tools using the **Model Context Protocol (MCP)**. It consists of a Unity **.NET/C# plugin** acting as the MCP TCP server, and a **Python MCP client** (built with FastMCP) that handles requests from AI agents. Communication between Unity and the client is done via a **custom TCP protocol**, enabling real-time, bidirectional exchange of JSON messages and image data.
 
-This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents (e.g. an LLM-based assistant) to **inspect and control a running Unity scene** in a structured, safe manner.
+This architecture cleanly separates the game engine concerns from the AI logic, improving scalability and maintainability. The goal is to allow AI agents (e.g. an LLM-based assistant) to **inspect and control a running Unity scene** in a structured, safe manner. The container-based approach for organizing resources and tools further improves code organization and reduces boilerplate.
 
 Key components include:
 
@@ -30,7 +30,8 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standar
 ## Features
 
 - Execute C# code in Unity from AI agents
-- Query Unity Editor state through MCP resources
+- Query Unity Editor state through MCP resources with dynamic parameter handling
+- Organize MCP resources and tools in logical containers for better organization
 - Capture screenshots with AI-driven parameters
 - Get logs and debug information from Unity
 - Modify GameObject properties with AI assistance
@@ -39,6 +40,7 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standar
 - Real-time communication via TCP sockets
 - TCP server hosted directly in Unity
 - Fast, efficient JSON serialization
+- Dynamic resource invocation with type-safe parameter mapping
 
 ## Getting Started
 

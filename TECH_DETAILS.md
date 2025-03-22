@@ -2,7 +2,7 @@
 
 ## System Architecture 
 
-The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem. The key difference from traditional MCP setups is that Unity acts as the TCP server rather than the client.
+The architecture is organized into two main processes (Unity and Python), each internally modular, following best practices of their ecosystem. The key difference from traditional MCP setups is that Unity acts as the TCP server rather than the client. The system now features a container-based organization pattern for tools and resources, which improves code structure and reduces duplication.
 
 ### Unity Server Structure
 
@@ -13,12 +13,14 @@ The Unity side is implemented as a typical Unity plugin with separate editor cod
 3. **MCPWindow**: Editor window for managing and monitoring the server.
 5. **Command Classes**: Individual command implementations for each functionality (ExecuteCode, TakeScreenshot, etc.).
 6. **TcpMessages**: Message types for handling communication (requests, responses, errors).
-7. **MCPRegistry**: Registry for tools and resources with schema information.
+7. **MCPRegistry**: Registry for tools and resources with schema information and support for container-based organization.
 8. **MCPToolSchema**: Schema models for tools and resources (ToolDescriptor, ResourceDescriptor, etc.).
+9. **MCPInvokers**: Tool and resource invokers with dynamic parameter mapping and type conversion.
+10. **MCPContainers**: Container classes that group related tools and resources with shared prefixes.
 
 ### Python Client Structure
 
-The Python client uses the FastMCP framework to define the available actions and data endpoints in an organized way. Key components include:
+The Python client uses the FastMCP framework to define the available actions and data endpoints in an organized way, with support for dynamic resource invocation and parameter mapping. Key components include:
 
 1. **mcp_server.py**: The main MCP server implementation using FastMCP with lifespan management.
 2. **unity_tcp_client.py**: The high-level client for communicating with Unity using TCP.
@@ -536,6 +538,17 @@ public static class PhysicsMcpContainer
     [MCPResource("collision_layers", "Get collision layer information", 
                  "unity://physics/layers", "unity://physics/layers")]
     public static string GetCollisionLayers()
+    {
+        // Implementation...
+    }
+    
+    // Example of a resource with parameters
+    [MCPResource("raycast_layers", "Get raycast information for specific layers", 
+                 "unity://physics/raycast?layerMask={layer_mask}&maxDistance={max_distance}", 
+                 "unity://physics/raycast?layerMask=1&maxDistance=100")]
+    public static string GetRaycastLayers(
+        [MCPParameter("layer_mask", "Layer mask for raycasting", "number", true)] int layerMask,
+        [MCPParameter("max_distance", "Maximum ray distance", "number", false)] float maxDistance = 100f)
     {
         // Implementation...
     }

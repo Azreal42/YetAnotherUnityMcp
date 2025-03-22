@@ -11,6 +11,8 @@ The YetAnotherUnityMcp plugin now supports a container-based approach for organi
 - **Prefix Support**: Automatically prefix tool/resource names with container name
 - **Clean Separation**: Separate implementation from registration
 - **Compatible**: Works alongside the existing class-based approach
+- **Dynamic Parameter Handling**: Built-in support for type mapping and parameter conversion
+- **Resource Parameterization**: Support for parameterized resources with type validation
 
 ## How It Works
 
@@ -51,6 +53,8 @@ public static string GetLogs(
     // Implementation
 }
 ```
+
+Resource methods can have multiple parameters with support for various types (string, int, float, bool) and automatic type conversion:
 
 ## Usage Example
 
@@ -157,6 +161,31 @@ The container-based approach includes comprehensive unit tests:
 1. Currently only supports static methods
 2. Container name must be unique across the application
 3. Method names must be unique within a container
+4. Parameter types are limited to basic types (string, int, float, bool, DateTime)
+5. No support for complex input objects or arrays in parameters (yet)
+
+## Parameter Passing Conventions
+
+When creating parameterized resources and tools, follow these conventions:
+
+1. **Parameter Names**: Use camelCase for parameter names (e.g., "maxDistance")
+2. **URI Template Variables**: In resource URL patterns, use snake_case in curly braces (e.g., "unity://resource?param={parameter_name}")
+3. **Parameter Attributes**: Always include [MCPParameter] attributes with proper documentation
+4. **Default Values**: Provide sensible defaults for optional parameters
+5. **Type Safety**: Resources will receive values converted to the correct C# type automatically
+
+Example:
+```csharp
+[MCPResource("objects_by_tag", "Find objects by tag and distance", 
+             "unity://scene/objects?tag={tag_name}&maxDistance={max_distance}", 
+             "unity://scene/objects?tag=Player&maxDistance=100")]
+public static string GetObjectsByTag(
+    [MCPParameter("tag_name", "Tag to search for", "string", true)] string tag,
+    [MCPParameter("max_distance", "Maximum distance to search", "number", false)] float maxDistance = 100f)
+{
+    // Implementation...
+}
+```
 
 ## Future Enhancements
 
@@ -164,3 +193,9 @@ The container-based approach includes comprehensive unit tests:
 2. Dependency injection for containers
 3. Async/await support for long-running operations
 4. Auto-generation of Python client code
+5. Support for complex object parameters
+6. Array parameter support
+7. Resource pagination for large datasets
+8. Optional strong typing of resource responses
+9. Schema validation for resource responses
+10. Resource caching capabilities
