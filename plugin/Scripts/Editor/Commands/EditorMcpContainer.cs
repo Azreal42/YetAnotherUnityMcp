@@ -214,33 +214,6 @@ namespace YetAnotherUnityMcp.Runtime
         #region Editor Information
         
         /// <summary>
-        /// Get information about all registered tools and resources
-        /// </summary>
-        /// <returns>JSON string describing all tools and resources</returns>
-        [MCPResource("schema", "Get information about available tools and resources", "unity://schema", "unity://schema")]
-        public static string GetSchema()
-        {
-            try
-            {
-                // Get schema as JSON
-                string result = MCPRegistry.Instance.GetSchemaAsJson();
-                
-                // Log success
-                Debug.Log("[EditorMcpContainer] Schema retrieved successfully");
-                
-                return result;
-            }
-            catch (Exception ex)
-            {
-                // Log error
-                Debug.LogError($"[EditorMcpContainer] Error retrieving schema: {ex.Message}");
-                
-                // Return error result
-                return $"{{\"error\": \"Error retrieving schema: {ex.Message}\"}}";
-            }
-        }
-        
-        /// <summary>
         /// Get information about the Unity Editor
         /// </summary>
         /// <returns>JSON string with editor information</returns>

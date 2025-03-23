@@ -20,6 +20,15 @@ class MockFastMCP:
     def __init__(self):
         self.registered_resources = {}
         self.registered_tools = {}
+        self._current_context = None
+        
+    def get_context(self):
+        """Get the current context"""
+        return self._current_context
+    
+    def set_context(self, ctx):
+        """Set the current context"""
+        self._current_context = ctx
         
     def resource(self, url_pattern, description=""):
         def decorator(func):
@@ -157,13 +166,17 @@ class TestUriParameterMatching:
                 return {"result": "success"}
                 
     @pytest.mark.asyncio
-    async def test_dynamic_resource_param_matching(self, mock_client):
+    async def test_dynamic_resource_param_matching(self, mock_client, mock_context):
         """Test that dynamic resources are registered with proper parameter matching"""
         # Use our mocked FastMCP that performs validation
         mcp = MockFastMCP()
+        mcp.set_context(mock_context)
         
         # Create a dynamic tool manager with mocked dependencies
-        with patch('server.dynamic_tools.get_client', return_value=mock_client):
+        with patch('server.dynamic_tools.get_client', return_value=mock_client), \
+             patch('server.dynamic_tools.execute_unity_operation', 
+                   new=lambda op_name, op, ctx, error_prefix: asyncio.create_task(op())):
+            
             manager = DynamicToolManager(mcp)
             
             # Register resources from schema

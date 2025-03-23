@@ -1,54 +1,104 @@
 {
   "tools": [
     {
-      "name": "execute_code",
-      "description": "Execute C# code in Unity",
+      "name": "scene_load_scene",
+      "description": "Load a scene by name",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "code": {
+          "scene_name": {
             "type": "string",
-            "description": "C# code to execute in the Unity environment",
-            "required": true
+            "description": "Name of the scene to load"
+          },
+          "mode": {
+            "type": "string",
+            "description": "Load mode (Single, Additive)"
           }
         },
         "required": [
-          "code"
+          "scene_name"
         ]
       },
-      "outputSchema": {
+      "example": "scene_load_scene(\"MainScene\", \"Additive\")"
+    },
+    {
+      "name": "global_unity_info",
+      "description": "Get information about the Unity environment",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "global_unity_logs",
+      "description": "Get logs from the Unity Editor console",
+      "inputSchema": {
         "type": "object",
         "properties": {
-          "result": {
+          "max_logs": {
+            "type": "number",
+            "description": "Maximum number of logs to retrieve"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "editor_execute_code",
+      "description": "Execute code in editor",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "param1": {
             "type": "string",
-            "description": "Result of the execute_code operation",
-            "required": true
+            "description": "Code to execute"
           }
         },
         "required": []
       },
-      "example": "execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")"
+      "example": "editor_execute_code(\"Debug.Log('Hello')\")"
     },
     {
-      "name": "modify_object",
+      "name": "editor_take_screenshot",
+      "description": "Take a screenshot of the Unity Editor",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "output_path": {
+            "type": "string",
+            "description": "Path where to save the screenshot"
+          },
+          "width": {
+            "type": "number",
+            "description": "Width of the screenshot"
+          },
+          "height": {
+            "type": "number",
+            "description": "Height of the screenshot"
+          }
+        },
+        "required": []
+      },
+      "example": "editor_take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)"
+    },
+    {
+      "name": "object_modify",
       "description": "Modify a property of a Unity GameObject",
       "inputSchema": {
         "type": "object",
         "properties": {
           "object_id": {
             "type": "string",
-            "description": "ID or path of the GameObject",
-            "required": true
+            "description": "ID or path of the GameObject"
           },
           "property_path": {
             "type": "string",
-            "description": "Path to the property to modify",
-            "required": true
+            "description": "Path to the property to modify"
           },
           "property_value": {
             "type": "any",
-            "description": "New value for the property",
-            "required": true
+            "description": "New value for the property"
           }
         },
         "required": [
@@ -57,117 +107,225 @@
           "property_value"
         ]
       },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "string",
-            "description": "Result of the modify_object operation",
-            "required": true
-          }
-        },
-        "required": []
-      },
-      "example": "modify_object(object_id=\"Main Camera\", property_path=\"transform.position.x\", property_value=10)"
+      "example": "object_modify(object_id=\"Main Camera\", property_path=\"transform.position.x\", property_value=10)"
     },
     {
-      "name": "take_screenshot",
-      "description": "Take a screenshot of the Unity Editor",
+      "name": "test_container_container_tool",
+      "description": "Test container tool",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "example": "test_container_tool()"
+    },
+    {
+      "name": "test_container_container_tool_with_params",
+      "description": "Test container tool with parameters",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "output_path": {
+          "param1": {
             "type": "string",
-            "description": "Path where to save the screenshot",
-            "required": false
+            "description": "First parameter"
           },
-          "width": {
+          "param2": {
             "type": "number",
-            "description": "Width of the screenshot",
-            "required": false
-          },
-          "height": {
-            "type": "number",
-            "description": "Height of the screenshot",
-            "required": false
+            "description": "Second parameter"
           }
         },
+        "required": [
+          "param1",
+          "param2"
+        ]
+      },
+      "example": "test_container_tool_with_params(\"value\", 42)"
+    },
+    {
+      "name": "test_tool",
+      "description": "Test tool for unit tests",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
         "required": []
       },
-      "outputSchema": {
+      "example": "test_tool()"
+    },
+    {
+      "name": "test_tool_with_params",
+      "description": "Test tool with parameters",
+      "inputSchema": {
         "type": "object",
         "properties": {
-          "result": {
+          "param1": {
             "type": "string",
-            "description": "Result of the take_screenshot operation",
-            "required": true
+            "description": "First parameter"
+          },
+          "param2": {
+            "type": "number",
+            "description": "Second parameter"
+          }
+        },
+        "required": [
+          "param1",
+          "param2"
+        ]
+      },
+      "example": "test_tool_with_params(\"value\", 42)"
+    },
+    {
+      "name": "execute_with_code",
+      "description": "Command with code as first parameter",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "param1": {
+            "type": "string",
+            "description": "Code to execute"
+          },
+          "param2": {
+            "type": "number",
+            "description": "Some number"
           }
         },
         "required": []
       },
-      "example": "take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)"
+      "example": "execute_with_code(code, 42)"
+    },
+    {
+      "name": "tool_with_optional",
+      "description": "Test tool with optional parameter",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "param1": {
+            "type": "string",
+            "description": "Parameter with default value"
+          }
+        },
+        "required": []
+      },
+      "example": "tool_with_optional()"
     }
   ],
   "resources": [
     {
-      "name": "unity_logs",
-      "description": "Get logs from the Unity Editor console",
-      "urlPattern": "unity://logs/{max_logs}",
+      "name": "scene_active_scene",
+      "description": "Get information about the active scene",
+      "uri": "unity://scene/active",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://scene/active"
+    },
+    {
+      "name": "scene_by_name",
+      "description": "Get information about a specific scene",
+      "uri": "unity://scene/{scene_name}",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://scene/MainScene"
+    },
+    {
+      "name": "scene_loaded_scenes",
+      "description": "Get a list of all loaded scenes",
+      "uri": "unity://scene/loaded",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://scene/loaded"
+    },
+    {
+      "name": "scene_objects",
+      "description": "Get a list of all GameObjects in the active scene",
+      "uri": "unity://scene/objects?include_inactive={include_inactive}",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://scene/objects?include_inactive=true"
+    },
+    {
+      "name": "editor_info",
+      "description": "Get information about the Unity Editor",
+      "uri": "unity://editor/info",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://editor/info"
+    },
+    {
+      "name": "editor_packages",
+      "description": "Get information about packages in the project",
+      "uri": "unity://editor/packages",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://editor/packages"
+    },
+    {
+      "name": "object_info",
+      "description": "Get information about a specific GameObject",
+      "uri": "unity://object/{object_id}",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://object/Main Camera"
+    },
+    {
+      "name": "object_component",
+      "description": "Get information about a component on a GameObject",
+      "uri": "unity://object/{object_id}/component/{component_type}",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://object/Main Camera/component/Camera"
+    },
+    {
+      "name": "test_container_container_resource",
+      "description": "Test container resource",
+      "uri": "unity://test/resource",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://test/resource"
+    },
+    {
+      "name": "test_container_container_resource_with_params",
+      "description": "Test container resource with parameters",
+      "uri": "unity://test/{param1}/{param2}",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://test/value1/42"
+    },
+    {
+      "name": "test_resource",
+      "description": "Test resource for unit tests",
+      "uri": "unity://test",
+      "mimeType": "application/json",
+      "parameters": {},
+      "example": "unity://test"
+    },
+    {
+      "name": "test_resource_with_params",
+      "description": "Test resource with parameters",
+      "uri": "unity://test/{param1}/{param2}",
+      "mimeType": "application/json",
       "parameters": {
-        "max_logs": {
+        "param1": {
           "type": "string",
-          "description": "Parameter max_logs for this resource",
-          "required": true
+          "description": "First parameter"
+        },
+        "param2": {
+          "type": "number",
+          "description": "Second parameter"
         }
       },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "string",
-            "description": "Result of the unity_logs resource",
-            "required": true
-          }
-        },
-        "required": []
-      },
-      "example": "unity://logs/50"
+      "example": "unity://test/value1/value2"
     },
     {
-      "name": "unity_schema",
-      "description": "Get information about available tools and resources",
-      "urlPattern": "unity://schema",
-      "parameters": {},
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "string",
-            "description": "Result of the unity_schema resource",
-            "required": true
-          }
-        },
-        "required": []
+      "name": "test_resource_with_default",
+      "description": "Test resource with default parameter",
+      "uri": "unity://test/default",
+      "mimeType": "application/json",
+      "parameters": {
+        "param1": {
+          "type": "string",
+          "description": "Parameter with default value"
+        }
       },
-      "example": "unity://schema"
-    },
-    {
-      "name": "unity_info",
-      "description": "Get information about the Unity environment",
-      "urlPattern": "unity://info",
-      "parameters": {},
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "string",
-            "description": "Result of the unity_info resource",
-            "required": true
-          }
-        },
-        "required": []
-      },
-      "example": "unity://info"
+      "example": "unity://test/default"
     }
   ]
 }

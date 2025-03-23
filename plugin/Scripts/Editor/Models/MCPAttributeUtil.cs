@@ -37,10 +37,10 @@ namespace YetAnotherUnityMcp.Editor.Models
                         {
                             Type = paramAttr.Type ?? GetTypeString(prop.PropertyType),
                             Description = paramAttr.Description,
-                            Required = paramAttr.Required
+                            IsRequired = paramAttr.IsRequired
                         };
                         
-                        if (paramAttr.Required)
+                        if (paramAttr.IsRequired)
                         {
                             schema.Required.Add(paramName);
                         }
@@ -94,8 +94,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 Name = toolName,
                 Description = toolAttr.Description,
                 Example = toolAttr.Example,
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
             
             // Build input schema from method parameters
@@ -113,7 +112,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     paramName = paramAttr.Name ?? paramName;
                     paramType = paramAttr.Type ?? paramType;
-                    isRequired = paramAttr.Required;
+                    isRequired = paramAttr.IsRequired;
                     description = paramAttr.Description;
                 }
                 else
@@ -127,7 +126,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     Type = paramType,
                     Description = description,
-                    Required = isRequired
+                    IsRequired = isRequired
                 };
                 
                 if (isRequired)
@@ -136,68 +135,9 @@ namespace YetAnotherUnityMcp.Editor.Models
                 }
             }
             
-            // Build output schema from return type
-            var returnType = executeMethod.ReturnType;
-            if (returnType != typeof(void))
-            {
-                string returnTypeName = "result";
-                string returnTypeStr = GetTypeString(returnType);
-                
-                if (returnType.IsPrimitive || returnType == typeof(string))
-                {
-                    // Simple return type
-                    descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
-                    {
-                        Type = returnTypeStr,
-                        Description = $"Result of the {toolName} operation",
-                        Required = true
-                    };
-                }
-                else if (returnType.IsClass || returnType.IsValueType)
-                {
-                    // Complex return type - check for properties with attributes
-                    var props = returnType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                    
-                    if (props.Length > 0)
-                    {
-                        foreach (var prop in props)
-                        {
-                            string propName = prop.Name;
-                            string propType = GetTypeString(prop.PropertyType);
-                            bool isRequired = true;
-                            string description = $"{propName} property";
-                            
-                            // Check for MCPParameter attribute
-                            var propAttr = prop.GetCustomAttribute<MCPParameterAttribute>();
-                            if (propAttr != null)
-                            {
-                                propName = propAttr.Name ?? propName;
-                                propType = propAttr.Type ?? propType;
-                                isRequired = propAttr.Required;
-                                description = propAttr.Description;
-                            }
-                            
-                            // Add to schema
-                            descriptor.OutputSchema.Properties[propName] = new ParameterDescriptor
-                            {
-                                Type = propType,
-                                Description = description,
-                                Required = isRequired
-                            };
-                        }
-                    }
-                    else
-                    {
-                        // No properties, treat as opaque object
-                        descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
-                        {
-                            Type = "object",
-                            Description = $"Result of the {toolName} operation",
-                            Required = true
-                        };
-                    }
-                }
-            }
+            // Output schema has been removed in MCP specification compliance
+            // The return type is no longer included in the schema itself
+            // It would now be handled at runtime with proper content array formatting
             
             return descriptor;
         }
@@ -244,9 +184,9 @@ namespace YetAnotherUnityMcp.Editor.Models
             {
                 Name = resourceName,
                 Description = resourceAttr.Description,
-                UrlPattern = resourceAttr.UrlPattern,
+                Uri = resourceAttr.UrlPattern, // Using UrlPattern for Uri (renamed property)
                 Example = resourceAttr.Example,
-                OutputSchema = new Schema()
+                MimeType = resourceAttr.MimeType // Use MIME type from attribute or default
             };
             
             // Get parameters from URL pattern
@@ -277,7 +217,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                             {
                                 description = paramAttr.Description;
                                 paramType = paramAttr.Type ?? paramType;
-                                isRequired = paramAttr.Required;
+                                isRequired = paramAttr.IsRequired;
                             }
                             
                             break;
@@ -288,103 +228,15 @@ namespace YetAnotherUnityMcp.Editor.Models
                     {
                         Type = paramType,
                         Description = description,
-                        Required = isRequired
+                        IsRequired = isRequired
                     };
                 }
             }
             
             descriptor.Parameters = parameters;
             
-            // Build output schema from return type
-            var returnType = resourceMethod.ReturnType;
-            if (returnType != typeof(void))
-            {
-                string returnTypeName = "result";
-                string returnTypeStr = GetTypeString(returnType);
-                
-                if (returnType.IsPrimitive || returnType == typeof(string))
-                {
-                    // Simple return type
-                    descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
-                    {
-                        Type = returnTypeStr,
-                        Description = $"Result of the {resourceName} resource",
-                        Required = true
-                    };
-                }
-                else if (returnType.IsClass || returnType.IsValueType)
-                {
-                    // Check if the type is a dictionary
-                    bool isDictionary = returnType.IsGenericType && 
-                                      (returnType.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
-                                       returnType.GetGenericTypeDefinition() == typeof(IDictionary<,>));
-                    
-                    // Complex return type - check for properties with attributes
-                    var props = returnType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                    
-                    if (props.Length > 0 && !isDictionary)
-                    {
-                        // For complex types with properties, add each property to the schema
-                        foreach (var prop in props)
-                        {
-                            string propName = prop.Name;
-                            string propType = GetTypeString(prop.PropertyType);
-                            bool isRequired = true;
-                            string description = $"{propName} property";
-                            
-                            // Check for MCPParameter attribute
-                            var paramAttr = prop.GetCustomAttribute<MCPParameterAttribute>();
-                            if (paramAttr != null)
-                            {
-                                propName = paramAttr.Name ?? propName;
-                                propType = paramAttr.Type ?? propType;
-                                isRequired = paramAttr.Required;
-                                description = paramAttr.Description;
-                            }
-                            
-                            // Add to schema
-                            descriptor.OutputSchema.Properties[propName] = new ParameterDescriptor
-                            {
-                                Type = propType,
-                                Description = description,
-                                Required = isRequired
-                            };
-                        }
-                        
-                        // Also add a generic result property for compatibility
-                        if (!descriptor.OutputSchema.Properties.ContainsKey(returnTypeName))
-                        {
-                            descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
-                            {
-                                Type = "object",
-                                Description = $"Complete result of the {resourceName} resource",
-                                Required = true
-                            };
-                        }
-                    }
-                    else
-                    {
-                        // For dictionaries or types with no properties, treat as opaque object
-                        descriptor.OutputSchema.Properties[returnTypeName] = new ParameterDescriptor
-                        {
-                            Type = "object",
-                            Description = $"Result of the {resourceName} resource",
-                            Required = true
-                        };
-                    }
-                }
-            }
-            
-            // Ensure there's always a result property in the output schema
-            if (descriptor.OutputSchema.Properties.Count == 0)
-            {
-                descriptor.OutputSchema.Properties["result"] = new ParameterDescriptor
-                {
-                    Type = "object",
-                    Description = $"Result of the {resourceName} resource",
-                    Required = true
-                };
-            }
+            // OutputSchema has been removed in MCP specification compliance
+            // Resources will now use content arrays in the response at runtime
             
             return descriptor;
         }
@@ -436,11 +288,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 descriptor.InputSchema = (InputSchema)GetSchemaFromType(inputSchemaType);
             }
             
-            // Add output schema
-            if (outputSchemaType != null)
-            {
-                descriptor.OutputSchema = GetSchemaFromType(outputSchemaType);
-            }
+            // Output schema has been removed in MCP specification compliance
             
             return descriptor;
         }
@@ -476,8 +324,9 @@ namespace YetAnotherUnityMcp.Editor.Models
             {
                 Name = resourceAttr.Name,
                 Description = resourceAttr.Description,
-                UrlPattern = resourceAttr.UrlPattern,
-                Example = resourceAttr.Example
+                Uri = resourceAttr.UrlPattern, // Using UrlPattern for Uri (renamed property)
+                Example = resourceAttr.Example,
+                MimeType = "application/json" // Default MIME type
             };
             
             // Get parameters from URL pattern
@@ -493,18 +342,14 @@ namespace YetAnotherUnityMcp.Editor.Models
                     {
                         Type = "string",
                         Description = $"Parameter {paramName} for this resource",
-                        Required = true
+                        IsRequired = true
                     };
                 }
             }
             
             descriptor.Parameters = parameters;
             
-            // Add output schema
-            if (outputSchemaType != null)
-            {
-                descriptor.OutputSchema = GetSchemaFromType(outputSchemaType);
-            }
+            // Output schema has been removed in MCP specification compliance
             
             return descriptor;
         }
@@ -604,7 +449,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     paramName = paramAttr.Name ?? paramName;
                     paramType = paramAttr.Type ?? paramType;
-                    isRequired = paramAttr.Required;
+                    isRequired = paramAttr.IsRequired;
                     description = paramAttr.Description ?? description;
                 }
                 
@@ -613,7 +458,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     Type = paramType,
                     Description = description,
-                    Required = isRequired
+                    IsRequired = isRequired
                 };
                 
                 if (isRequired)
@@ -651,7 +496,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     Type = returnTypeStr,
                     Description = "Result of the operation",
-                    Required = true
+                    IsRequired = true
                 };
             }
             else if (returnType.IsClass || returnType.IsValueType)
@@ -680,7 +525,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                         {
                             propName = paramAttr.Name ?? propName;
                             propType = paramAttr.Type ?? propType;
-                            isRequired = paramAttr.Required;
+                            isRequired = paramAttr.IsRequired;
                             description = paramAttr.Description ?? description;
                         }
                         
@@ -689,7 +534,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                         {
                             Type = propType,
                             Description = description,
-                            Required = isRequired
+                            IsRequired = isRequired
                         };
                     }
                 }
@@ -700,7 +545,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                     {
                         Type = "object",
                         Description = "Result of the operation",
-                        Required = true
+                        IsRequired = true
                     };
                 }
             }
@@ -712,7 +557,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     Type = "object",
                     Description = "Result of the operation",
-                    Required = true
+                    IsRequired = true
                 };
             }
             
@@ -755,7 +600,6 @@ namespace YetAnotherUnityMcp.Editor.Models
                 Description = toolAttr.Description ?? $"Tool for {method.Name}",
                 Example = toolAttr.Example,
                 InputSchema = GetSchemaFromMethodParameters(method),
-                OutputSchema = GetSchemaFromReturnType(method),
                 MethodInfo = method,
                 ContainerType = containerType
             };
@@ -814,9 +658,9 @@ namespace YetAnotherUnityMcp.Editor.Models
             {
                 Name = resourceName,
                 Description = resourceAttr.Description ?? $"Resource for {method.Name}",
-                UrlPattern = urlPattern,
+                Uri = urlPattern, // Using Uri property (renamed from UrlPattern)
                 Example = resourceAttr.Example,
-                OutputSchema = GetSchemaFromReturnType(method),
+                MimeType = "application/json", // Default MIME type
                 MethodInfo = method,
                 ContainerType = containerType
             };
@@ -849,7 +693,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                             {
                                 description = paramAttr.Description ?? description;
                                 paramType = paramAttr.Type ?? paramType;
-                                isRequired = paramAttr.Required;
+                                isRequired = paramAttr.IsRequired;
                             }
                             
                             break;
@@ -860,7 +704,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                     {
                         Type = paramType,
                         Description = description,
-                        Required = isRequired
+                        IsRequired = isRequired
                     };
                 }
             }

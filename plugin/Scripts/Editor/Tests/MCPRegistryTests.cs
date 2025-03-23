@@ -69,8 +69,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 Name = "test_tool",
                 Description = "Test tool",
                 Example = "test_tool()",
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
 
             // Act
@@ -91,8 +90,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 Name = "test_tool",
                 Description = "Original description",
                 Example = "test_tool()",
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
 
             var tool2 = new ToolDescriptor
@@ -100,8 +98,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 Name = "test_tool",
                 Description = "Updated description",
                 Example = "test_tool(param: 123)",
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
 
             // Act
@@ -123,10 +120,10 @@ namespace YetAnotherUnityMcp.Editor.Tests
             {
                 Name = "test_resource",
                 Description = "Test resource",
-                UrlPattern = "test/{id}",
+                Uri = "test/{id}",
                 Example = "test/123",
-                Parameters = new Dictionary<string, ParameterDescriptor>(),
-                OutputSchema = new Schema()
+                MimeType = "application/json",
+                Parameters = new Dictionary<string, ParameterDescriptor>()
             };
 
             // Act
@@ -136,7 +133,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual(1, registry.Schema.Resources.Count, "Should have 1 registered resource");
             Assert.AreEqual("test_resource", registry.Schema.Resources[0].Name, "Resource name should match");
             Assert.AreEqual("Test resource", registry.Schema.Resources[0].Description, "Resource description should match");
-            Assert.AreEqual("test/{id}", registry.Schema.Resources[0].UrlPattern, "Resource URL pattern should match");
+            Assert.AreEqual("test/{id}", registry.Schema.Resources[0].Uri, "Resource URI should match");
+            Assert.AreEqual("application/json", registry.Schema.Resources[0].MimeType, "Resource MIME type should match");
         }
 
         [Test]
@@ -147,20 +145,20 @@ namespace YetAnotherUnityMcp.Editor.Tests
             {
                 Name = "test_resource",
                 Description = "Original description",
-                UrlPattern = "test/{id}",
+                Uri = "test/{id}",
                 Example = "test/123",
-                Parameters = new Dictionary<string, ParameterDescriptor>(),
-                OutputSchema = new Schema()
+                MimeType = "application/json",
+                Parameters = new Dictionary<string, ParameterDescriptor>()
             };
 
             var resource2 = new ResourceDescriptor
             {
                 Name = "test_resource",
                 Description = "Updated description",
-                UrlPattern = "test/{id}/detail",
+                Uri = "test/{id}/detail",
                 Example = "test/123/detail",
-                Parameters = new Dictionary<string, ParameterDescriptor>(),
-                OutputSchema = new Schema()
+                MimeType = "text/plain",
+                Parameters = new Dictionary<string, ParameterDescriptor>()
             };
 
             // Act
@@ -171,7 +169,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual(1, registry.Schema.Resources.Count, "Should still have 1 registered resource");
             Assert.AreEqual("test_resource", registry.Schema.Resources[0].Name, "Resource name should match");
             Assert.AreEqual("Updated description", registry.Schema.Resources[0].Description, "Resource description should be updated");
-            Assert.AreEqual("test/{id}/detail", registry.Schema.Resources[0].UrlPattern, "Resource URL pattern should be updated");
+            Assert.AreEqual("test/{id}/detail", registry.Schema.Resources[0].Uri, "Resource URI should be updated");
+            Assert.AreEqual("text/plain", registry.Schema.Resources[0].MimeType, "Resource MIME type should be updated");
         }
 
         [Test]
@@ -183,18 +182,17 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 Name = "test_tool",
                 Description = "Test tool",
                 Example = "test_tool()",
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
 
             var resource = new ResourceDescriptor
             {
                 Name = "test_resource",
                 Description = "Test resource",
-                UrlPattern = "test/{id}",
+                Uri = "test/{id}",
                 Example = "test/123",
-                Parameters = new Dictionary<string, ParameterDescriptor>(),
-                OutputSchema = new Schema()
+                MimeType = "application/json",
+                Parameters = new Dictionary<string, ParameterDescriptor>()
             };
 
             registry.RegisterTool(tool);
@@ -227,7 +225,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual(1, registry.Schema.Resources.Count, "Should have 1 registered resource");
             Assert.AreEqual("test_registry_resource", registry.Schema.Resources[0].Name, "Resource name should match");
             Assert.AreEqual("Test registry resource", registry.Schema.Resources[0].Description, "Resource description should match");
-            Assert.AreEqual("resource/{id}", registry.Schema.Resources[0].UrlPattern, "Resource URL pattern should match");
+            Assert.AreEqual("resource/{id}", registry.Schema.Resources[0].Uri, "Resource URI should match");
             Assert.IsTrue(registry.Schema.Resources[0].MethodInfo != null, "Resource should have method info");
             Assert.AreEqual(typeof(MockTestContainer), registry.Schema.Resources[0].ContainerType, "Resource should have container type");
         }
@@ -258,8 +256,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 Description = "Test registry tool",
                 Example = "test_registry_tool()",
                 ContainerType = mockType,
-                InputSchema = new InputSchema(),
-                OutputSchema = new Schema()
+                InputSchema = new InputSchema()
             };
             
             // Register the tool descriptor
@@ -280,14 +277,14 @@ namespace YetAnotherUnityMcp.Editor.Tests
             {
                 Name = "test_registry_resource",
                 Description = "Test registry resource",
-                UrlPattern = "resource/{id}",
+                Uri = "resource/{id}",
                 Example = "resource/123",
+                MimeType = "application/json",
                 ContainerType = typeof(MockRegistryResource),
                 Parameters = new Dictionary<string, ParameterDescriptor>
                 {
-                    { "id", new ParameterDescriptor { Description = "Resource ID", Type = "string", Required = true } }
-                },
-                OutputSchema = new Schema()
+                    { "id", new ParameterDescriptor { Description = "Resource ID", Type = "string", IsRequired = true } }
+                }
             };
             
             // Register the resource descriptor
@@ -297,7 +294,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.AreEqual(1, registry.Schema.Resources.Count, "Should have 1 registered resource");
             Assert.AreEqual("test_registry_resource", registry.Schema.Resources[0].Name, "Resource name should match");
             Assert.AreEqual("Test registry resource", registry.Schema.Resources[0].Description, "Resource description should match");
-            Assert.AreEqual("resource/{id}", registry.Schema.Resources[0].UrlPattern, "Resource URL pattern should match");
+            Assert.AreEqual("resource/{id}", registry.Schema.Resources[0].Uri, "Resource URI should match");
+            Assert.AreEqual("application/json", registry.Schema.Resources[0].MimeType, "Resource MIME type should match");
         }
     }
 }

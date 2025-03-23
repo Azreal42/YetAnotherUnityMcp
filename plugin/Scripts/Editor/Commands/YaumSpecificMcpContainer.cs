@@ -82,30 +82,6 @@ namespace YetAnotherUnityMcp.Editor.Containers
                 return $"Error getting Unity info: {ex.Message}\nStackTrace: {ex.StackTrace}";
             }
         }
-
-        public static string GetSchema()
-        {
-            try
-            {
-                // Get schema as JSON
-                string result = MCPRegistry.Instance.GetSchemaAsJson();
-                
-                // Log success
-                Debug.Log("[EditorMcpContainer] Schema retrieved successfully");
-                
-                return result;
-            }
-            catch (Exception ex)
-            {
-                // Log error
-                Debug.LogError($"[EditorMcpContainer] Error retrieving schema: {ex.Message}");
-                
-                // Return error result
-                return $"{{\"error\": \"Error retrieving schema: {ex.Message}\"}}";
-            }
-        }
-
-
         
         /// <summary>
         /// Get logs from the Unity Editor console

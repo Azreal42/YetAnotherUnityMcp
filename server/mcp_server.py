@@ -31,7 +31,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     Yields:
         Empty dictionary for state (not used)
     """
-    logger.info(rf"Server starting: initializing Unity TCP client...{server}")
+    logger.info("Server starting: initializing Unity TCP client...")
     
     try:
         from server.dynamic_tools import get_manager

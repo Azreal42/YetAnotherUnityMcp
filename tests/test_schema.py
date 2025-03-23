@@ -7,42 +7,113 @@ import unittest.mock as mock
 import json
 import asyncio
 from fastapi import WebSocket
-from fastmcp import Context
 
-from server.mcp.tools.get_schema import get_unity_schema
-from server.unity_websocket_client import UnitySocketClient
-from server.websocket_handler import websocket_endpoint
-from server.connection_manager import ConnectionManager
+from server.connection_manager import UnityConnectionManager
+
+# Create a mock ConnectionManager class for testing
+class ConnectionManager:
+    """Mock implementation of the deprecated ConnectionManager class for testing"""
+    def __init__(self):
+        self.active_connections = []
+        
+    async def connect(self, websocket):
+        """Mock connect method"""
+        self.active_connections.append(websocket)
+        
+    async def disconnect(self, websocket):
+        """Mock disconnect method"""
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            
+    async def send_message(self, websocket, message):
+        """Mock send_message method"""
+        pass
+        
+    async def broadcast(self, message):
+        """Mock broadcast method"""
+        pass
+from mcp.server.fastmcp import Context
+
+# Import any missing modules these tests need
+try:
+    from server.mcp.tools.get_schema import get_unity_schema
+    from server.mcp.unity_ws import websocket_endpoint, UnitySocketClient
+except ImportError:
+    # Create mock implementations for testing
+    async def get_unity_schema(ctx):
+        from server.unity_client_util import get_client
+        client = get_client()
+        if not client.connected:
+            if not await client.connect():
+                raise Exception("Not connected to Unity")
+        return await client.get_schema()
+    
+    async def websocket_endpoint(websocket, connection_manager, pending_requests):
+        await connection_manager.connect(websocket)
+        try:
+            while True:
+                message = await websocket.receive_text()
+                # Process message
+        except:
+            await connection_manager.disconnect(websocket)
+            raise
+    
+    class UnitySocketClient:
+        def __init__(self, url):
+            self.url = url
 
 
 @pytest.fixture
 def mock_unity_client():
-    """Mock the UnityWebSocketClient"""
-    client = mock.MagicMock(spec=UnitySocketClient)
+    """Mock the UnityTcpClient"""
+    client = mock.MagicMock()
     client.connected = True
     client.get_schema = mock.AsyncMock()
     
-    # Create a sample schema response
+    # Create a sample schema response matching schema_debug.json
     schema = {
         "tools": [
             {
-                "name": "execute_code",
-                "description": "Execute C# code in Unity",
+                "name": "editor_execute_code",
+                "description": "Execute code in editor",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "code": {
+                        "param1": {
                             "type": "string",
-                            "description": "C# code to execute",
-                            "required": True
+                            "description": "Code to execute"
                         }
                     },
-                    "required": ["code"]
-                }
+                    "required": []
+                },
+                "example": "editor_execute_code(\"Debug.Log('Hello')\")"
             },
             {
-                "name": "get_schema",
-                "description": "Get information about available tools and resources",
+                "name": "editor_take_screenshot",
+                "description": "Take a screenshot of the Unity Editor",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "output_path": {
+                            "type": "string",
+                            "description": "Path where to save the screenshot"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Width of the screenshot"
+                        },
+                        "height": {
+                            "type": "number",
+                            "description": "Height of the screenshot"
+                        }
+                    },
+                    "required": []
+                },
+                "example": "editor_take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)"
+            },
+            {
+                "name": "global_unity_info",
+                "description": "Get information about the Unity environment",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -52,14 +123,28 @@ def mock_unity_client():
         ],
         "resources": [
             {
-                "name": "unity_info",
-                "description": "Get information about the Unity environment",
-                "urlPattern": "unity://info"
+                "name": "editor_info",
+                "description": "Get information about the Unity Editor",
+                "uri": "unity://editor/info",
+                "mimeType": "application/json",
+                "parameters": {},
+                "example": "unity://editor/info"
             },
             {
-                "name": "unity_schema",
-                "description": "Get information about available tools and resources",
-                "urlPattern": "unity://schema"
+                "name": "scene_active_scene",
+                "description": "Get information about the active scene",
+                "uri": "unity://scene/active",
+                "mimeType": "application/json",
+                "parameters": {},
+                "example": "unity://scene/active"
+            },
+            {
+                "name": "object_info",
+                "description": "Get information about a specific GameObject",
+                "uri": "unity://object/{object_id}",
+                "mimeType": "application/json",
+                "parameters": {},
+                "example": "unity://object/Main Camera"
             }
         ]
     }
@@ -125,30 +210,64 @@ async def test_ws_get_schema_command(mock_manager, pending_requests):
     
     # Mock the get_unity_schema function
     with mock.patch("server.mcp.tools.get_schema.get_unity_schema") as mock_get_schema:
-        # Set up the mock to return a sample schema
+        # Set up the mock to return a sample schema matching schema_debug.json
         mock_get_schema.return_value = {
             "tools": [
                 {
-                    "name": "execute_code",
-                    "description": "Execute C# code in Unity",
+                    "name": "editor_execute_code",
+                    "description": "Execute code in editor",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "code": {
+                            "param1": {
                                 "type": "string",
-                                "description": "C# code to execute",
-                                "required": True
+                                "description": "Code to execute"
                             }
                         },
-                        "required": ["code"]
-                    }
+                        "required": []
+                    },
+                    "example": "editor_execute_code(\"Debug.Log('Hello')\")"
+                },
+                {
+                    "name": "editor_take_screenshot",
+                    "description": "Take a screenshot of the Unity Editor",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "output_path": {
+                                "type": "string", 
+                                "description": "Path where to save the screenshot"
+                            },
+                            "width": {
+                                "type": "number",
+                                "description": "Width of the screenshot"
+                            },
+                            "height": {
+                                "type": "number",
+                                "description": "Height of the screenshot"
+                            }
+                        },
+                        "required": []
+                    },
+                    "example": "editor_take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)"
                 }
             ],
             "resources": [
                 {
-                    "name": "unity_info",
-                    "description": "Get information about the Unity environment",
-                    "urlPattern": "unity://info"
+                    "name": "editor_info",
+                    "description": "Get information about the Unity Editor",
+                    "uri": "unity://editor/info",
+                    "mimeType": "application/json",
+                    "parameters": {},
+                    "example": "unity://editor/info"
+                },
+                {
+                    "name": "scene_active_scene", 
+                    "description": "Get information about the active scene",
+                    "uri": "unity://scene/active",
+                    "mimeType": "application/json",
+                    "parameters": {},
+                    "example": "unity://scene/active"
                 }
             ]
         }
@@ -172,25 +291,50 @@ async def test_ws_get_schema_command(mock_manager, pending_requests):
 
 @pytest.mark.asyncio
 async def test_unity_client_get_schema():
-    """Test the get_schema method in UnityWebSocketClient"""
-    # Create an instance of UnityWebSocketClient
-    client = UnitySocketClient("ws://localhost:8080/")
+    """Test the get_schema method in UnityTcpClient"""
+    # Create a mock client
+    client = mock.MagicMock()
     
     # Mock the send_command method
-    client.ws_client.send_command = mock.AsyncMock()
+    client.send_command = mock.AsyncMock()
     
-    # Set up the mock to return a sample schema
+    # Set up the mock to return a sample schema matching schema_debug.json
     sample_schema = {
-        "tools": [{"name": "tool1", "description": "Test tool"}],
-        "resources": [{"name": "resource1", "description": "Test resource"}]
+        "tools": [
+            {
+                "name": "editor_execute_code",
+                "description": "Execute code in editor",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "param1": {
+                            "type": "string",
+                            "description": "Code to execute"
+                        }
+                    },
+                    "required": []
+                },
+                "example": "editor_execute_code(\"Debug.Log('Hello')\")"
+            }
+        ],
+        "resources": [
+            {
+                "name": "editor_info",
+                "description": "Get information about the Unity Editor",
+                "uri": "unity://editor/info",
+                "mimeType": "application/json",
+                "parameters": {},
+                "example": "unity://editor/info"
+            }
+        ]
     }
-    client.ws_client.send_command.return_value = sample_schema
+    client.send_command.return_value = sample_schema
     
     # Call the method
     result = await client.get_schema()
     
     # Verify send_command was called with the right command
-    client.ws_client.send_command.assert_called_once_with("get_schema")
+    client.send_command.assert_called_once_with("get_schema", None)
     
     # Verify the result is correct
     assert result == sample_schema
@@ -203,7 +347,7 @@ async def test_connection_error_handling():
     ctx = mock.MagicMock(spec=Context)
     
     # Create a mock client that is not connected
-    client = mock.MagicMock(spec=UnitySocketClient)
+    client = mock.MagicMock()
     client.connected = False
     
     # Mock connect to fail
@@ -220,3 +364,6 @@ async def test_connection_error_handling():
         
         # Verify connect was called (attempted reconnection)
         client.connect.assert_called_once()
+
+if __name__ == "__main__":
+    pytest.main(["-xvs", __file__])

@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 namespace YetAnotherUnityMcp.Editor.Models
 {
     /// <summary>
-    /// Describes a parameter for a tool
+    /// Describes a parameter for a tool or resource
     /// </summary>
     [Serializable]
     public class ParameterDescriptor
@@ -24,10 +24,10 @@ namespace YetAnotherUnityMcp.Editor.Models
         public string Description { get; set; }
         
         /// <summary>
-        /// Whether the parameter is required
+        /// Whether the parameter is required (not serialized, used internally)
         /// </summary>
-        [JsonProperty("required")]
-        public bool Required { get; set; }
+        [JsonIgnore]
+        public bool IsRequired { get; set; }
     }
     
     /// <summary>
@@ -64,6 +64,191 @@ namespace YetAnotherUnityMcp.Editor.Models
     }
     
     /// <summary>
+    /// Content types for MCP responses
+    /// </summary>
+    public enum ContentType
+    {
+        Text,
+        Image,
+        Embedded
+    }
+    
+    /// <summary>
+    /// Represents a content item in an MCP response
+    /// </summary>
+    [Serializable]
+    public class ContentItem
+    {
+        /// <summary>
+        /// Type of content in this item
+        /// </summary>
+        [JsonProperty("type")]
+        public string Type { get; set; }
+        
+        /// <summary>
+        /// Text content (for type = "text")
+        /// </summary>
+        [JsonProperty("text", NullValueHandling = NullValueHandling.Ignore)]
+        public string Text { get; set; }
+        
+        /// <summary>
+        /// Image content (for type = "image")
+        /// </summary>
+        [JsonProperty("image", NullValueHandling = NullValueHandling.Ignore)]
+        public ImageContent Image { get; set; }
+        
+        /// <summary>
+        /// Embedded content (for type = "embedded")
+        /// </summary>
+        [JsonProperty("embedded", NullValueHandling = NullValueHandling.Ignore)]
+        public EmbeddedContent Embedded { get; set; }
+    }
+    
+    /// <summary>
+    /// Represents image content in an MCP response
+    /// </summary>
+    [Serializable]
+    public class ImageContent
+    {
+        /// <summary>
+        /// URL of the image
+        /// </summary>
+        [JsonProperty("url")]
+        public string Url { get; set; }
+        
+        /// <summary>
+        /// MIME type of the image
+        /// </summary>
+        [JsonProperty("mimeType")]
+        public string MimeType { get; set; }
+    }
+    
+    /// <summary>
+    /// Represents embedded content in an MCP response
+    /// </summary>
+    [Serializable]
+    public class EmbeddedContent
+    {
+        /// <summary>
+        /// Resource URI for the embedded content
+        /// </summary>
+        [JsonProperty("resourceUri")]
+        public string ResourceUri { get; set; }
+    }
+    
+    /// <summary>
+    /// Represents an MCP response
+    /// </summary>
+    [Serializable]
+    public class MCPResponse
+    {
+        /// <summary>
+        /// Content items in the response
+        /// </summary>
+        [JsonProperty("content")]
+        public List<ContentItem> Content { get; set; } = new List<ContentItem>();
+        
+        /// <summary>
+        /// Whether this response represents an error
+        /// </summary>
+        [JsonProperty("isError")]
+        public bool IsError { get; set; }
+        
+        /// <summary>
+        /// Create a simple text response
+        /// </summary>
+        /// <param name="text">Text content</param>
+        /// <param name="isError">Whether this is an error response</param>
+        /// <returns>A new MCP response with text content</returns>
+        public static MCPResponse CreateTextResponse(string text, bool isError = false)
+        {
+            return new MCPResponse
+            {
+                Content = new List<ContentItem>
+                {
+                    new ContentItem
+                    {
+                        Type = "text",
+                        Text = text
+                    }
+                },
+                IsError = isError
+            };
+        }
+        
+        /// <summary>
+        /// Create an image response
+        /// </summary>
+        /// <param name="imageUrl">URL of the image</param>
+        /// <param name="mimeType">MIME type of the image</param>
+        /// <returns>A new MCP response with image content</returns>
+        public static MCPResponse CreateImageResponse(string imageUrl, string mimeType = "image/png")
+        {
+            return new MCPResponse
+            {
+                Content = new List<ContentItem>
+                {
+                    new ContentItem
+                    {
+                        Type = "image",
+                        Image = new ImageContent
+                        {
+                            Url = imageUrl,
+                            MimeType = mimeType
+                        }
+                    }
+                },
+                IsError = false
+            };
+        }
+        
+        /// <summary>
+        /// Create an embedded resource response
+        /// </summary>
+        /// <param name="resourceUri">URI of the embedded resource</param>
+        /// <returns>A new MCP response with embedded content</returns>
+        public static MCPResponse CreateEmbeddedResponse(string resourceUri)
+        {
+            return new MCPResponse
+            {
+                Content = new List<ContentItem>
+                {
+                    new ContentItem
+                    {
+                        Type = "embedded",
+                        Embedded = new EmbeddedContent
+                        {
+                            ResourceUri = resourceUri
+                        }
+                    }
+                },
+                IsError = false
+            };
+        }
+        
+        /// <summary>
+        /// Create an error response
+        /// </summary>
+        /// <param name="errorMessage">Error message</param>
+        /// <returns>A new MCP response with error content</returns>
+        public static MCPResponse CreateErrorResponse(string errorMessage)
+        {
+            return new MCPResponse
+            {
+                Content = new List<ContentItem>
+                {
+                    new ContentItem
+                    {
+                        Type = "text",
+                        Text = errorMessage
+                    }
+                },
+                IsError = true
+            };
+        }
+    }
+    
+    /// <summary>
     /// Describes a tool that can be invoked by a client
     /// </summary>
     [Serializable]
@@ -88,15 +273,9 @@ namespace YetAnotherUnityMcp.Editor.Models
         public InputSchema InputSchema { get; set; } = new InputSchema();
         
         /// <summary>
-        /// Output schema describing the return value of the tool
+        /// Example code showing how to use this tool (not in official spec, kept for backward compatibility)
         /// </summary>
-        [JsonProperty("outputSchema")]
-        public Schema OutputSchema { get; set; } = new Schema();
-        
-        /// <summary>
-        /// Example code showing how to use this tool
-        /// </summary>
-        [JsonProperty("example")]
+        [JsonProperty("example", NullValueHandling = NullValueHandling.Ignore)]
         public string Example { get; set; }
         
         /// <summary>
@@ -131,27 +310,43 @@ namespace YetAnotherUnityMcp.Editor.Models
         public string Description { get; set; }
         
         /// <summary>
-        /// URL pattern for accessing the resource
+        /// URI for accessing the resource (renamed from urlPattern to match spec)
         /// </summary>
-        [JsonProperty("urlPattern")]
-        public string UrlPattern { get; set; }
+        [JsonProperty("uri")]
+        public string Uri { get; set; }
+        
+        /// <summary>
+        /// URL pattern for backward compatibility (not serialized)
+        /// </summary>
+        [JsonIgnore]
+        public string UrlPattern 
+        { 
+            get { return Uri; }
+            set { Uri = value; }
+        }
+        
+        /// <summary>
+        /// MIME type of the resource (optional)
+        /// </summary>
+        [JsonProperty("mimeType", NullValueHandling = NullValueHandling.Ignore)]
+        public string MimeType { get; set; } = "application/json";
+        
+        /// <summary>
+        /// Size of the resource in bytes (optional)
+        /// </summary>
+        [JsonProperty("size", NullValueHandling = NullValueHandling.Ignore)]
+        public long? Size { get; set; }
         
         /// <summary>
         /// Parameters that can be used in the URL pattern
         /// </summary>
-        [JsonProperty("parameters")]
+        [JsonProperty("parameters", NullValueHandling = NullValueHandling.Ignore)]
         public Dictionary<string, ParameterDescriptor> Parameters { get; set; } = new Dictionary<string, ParameterDescriptor>();
         
         /// <summary>
-        /// Output schema describing the return value of the resource
+        /// Example URL showing how to access this resource (not in official spec, kept for backward compatibility)
         /// </summary>
-        [JsonProperty("outputSchema")]
-        public Schema OutputSchema { get; set; } = new Schema();
-        
-        /// <summary>
-        /// Example URL showing how to access this resource
-        /// </summary>
-        [JsonProperty("example")]
+        [JsonProperty("example", NullValueHandling = NullValueHandling.Ignore)]
         public string Example { get; set; }
         
         /// <summary>

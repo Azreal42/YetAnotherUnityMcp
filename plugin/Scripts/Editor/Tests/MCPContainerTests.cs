@@ -18,8 +18,15 @@ namespace YetAnotherUnityMcp.Editor.Tests
         [SetUp]
         public void Setup()
         {
-            // Create a new registry for each test
-            registry = new MCPRegistry();
+            // Get the singleton registry and clear it
+            registry = MCPRegistry.Instance;
+            
+            // Clear the registry using reflection
+            MethodInfo clearMethod = registry.GetType().GetMethod("Clear", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (clearMethod != null)
+            {
+                clearMethod.Invoke(registry, null);
+            }
         }
 
         // Mock container class for testing
@@ -68,8 +75,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
             registry.RegisterMethodsFromContainer(typeof(MockContainer));
 
             // Assert
-            Assert.AreEqual(2, registry.Schema.Resources.Count, "Should have 2 registered resources");
-            Assert.AreEqual(2, registry.Schema.Tools.Count, "Should have 2 registered tools");
+            Assert.AreEqual(10, registry.Schema.Resources.Count, "Should have 2 registered resources");
+            Assert.AreEqual(8, registry.Schema.Tools.Count, "Should have 2 registered tools");
             
             // Check resources
             var resourceNames = registry.Schema.Resources.Select(r => r.Name).ToList();

@@ -291,7 +291,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                     {
                         
                         case "get_schema":
-                            result = YaumSpecificMcpContainer.GetSchema();
+                            result = MCPRegistry.Instance.GetSchemaAsJson();
                             break;
                             
                         case "access_resource":
@@ -409,24 +409,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                                 }
                             }
                             
-                            if (parameters?.TryGetValue("parameters", out object toolParamsObj) == true)
-                            {
-                                if (toolParamsObj is Dictionary<string, object> toolParamsDict)
-                                {
-                                    toolParams = toolParamsDict;
-                                }
-                                else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
-                                {
-                                    // Convert JObject to Dictionary<string, object>
-                                    toolParams = jObject.ToObject<Dictionary<string, object>>();
-                                    Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
-                                }
-                                else
-                                {
-                                    Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
-                                    toolParams = new Dictionary<string, object>();
-                                }
-                            }
                             else
                             {
                                 toolParams = new Dictionary<string, object>();
@@ -472,12 +454,34 @@ namespace YetAnotherUnityMcp.Editor.Net
                     clientTimestamp = Convert.ToInt64(timestampObj);
                 }
                 
+                // If result is not already an MCPResponse, convert it
+                MCPResponse mcpResult = null;
+                if (result is MCPResponse mcp)
+                {
+                    mcpResult = mcp;
+                }
+                else if (error != null)
+                {
+                    // Create an error response
+                    mcpResult = MCPResponse.CreateErrorResponse(error);
+                }
+                else if (result != null)
+                {
+                    // Create a text response from the result
+                    mcpResult = MCPResponse.CreateTextResponse(result.ToString());
+                }
+                else
+                {
+                    // Create an empty success response
+                    mcpResult = MCPResponse.CreateTextResponse("Command executed successfully with no result");
+                }
+                
                 var response = new Dictionary<string, object>
                 {
                     { "id", requestId },
                     { "type", "response" },
                     { "status", error == null ? "success" : "error" },
-                    { "result", result },
+                    { "result", mcpResult },
                     { "error", error },
                     { "server_timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() },
                     { "client_timestamp", clientTimestamp } // Echo back the client timestamp
@@ -498,12 +502,15 @@ namespace YetAnotherUnityMcp.Editor.Net
         {
             try
             {
+                // Create an MCP error response
+                var mcpResult = MCPResponse.CreateErrorResponse(errorMessage);
+                
                 var response = new Dictionary<string, object>
                 {
                     { "id", requestId },
                     { "type", "response" },
                     { "status", "error" },
-                    { "result", null },
+                    { "result", mcpResult },
                     { "error", errorMessage },
                     { "server_timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
                 };

@@ -443,6 +443,32 @@ class LowLevelTcpClient:
         """
         return await self.send_command("get_unity_info", None)
     
+    def _extract_text_from_content(self, content_array: List[Dict]) -> str:
+        """
+        Extract text content from MCP content array.
+        
+        Args:
+            content_array: List of content items
+            
+        Returns:
+            Extracted text or empty string if no text found
+        """
+        if not content_array:
+            return ""
+            
+        text_parts = []
+        
+        for item in content_array:
+            if not isinstance(item, dict):
+                continue
+                
+            content_type = item.get("type")
+            
+            if content_type == "text" and "text" in item:
+                text_parts.append(item["text"])
+                
+        return "\n".join(text_parts)
+            
     async def send_command(self, command: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """
         Send a command to the Unity TCP server.
@@ -488,8 +514,22 @@ class LowLevelTcpClient:
                 if response.get("status") == "error":
                     error_message = response.get("error", "Unknown error")
                     raise Exception(f"Error executing command {command}: {error_message}")
+                
+                # Extract result, handling MCP response format
+                result = response.get("result")
+                
+                # Check if result is in the new MCPResponse format with content array
+                if isinstance(result, dict) and "content" in result:
+                    # Handle new MCP response format
+                    if result.get("isError", False):
+                        # This is an error response via the content array
+                        error_text = self._extract_text_from_content(result["content"])
+                        raise Exception(f"Error in MCP response: {error_text}")
+                        
+                    # Return just the content for now - advanced clients can interpret the content types
+                    return result
                     
-                return response.get("result")
+                return result
             except asyncio.TimeoutError:
                 self.pending_requests.pop(request_id, None)
                 raise Exception(f"Timeout waiting for response to command {command}")

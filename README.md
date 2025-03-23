@@ -27,6 +27,12 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standar
 - **Tools**: Allowing LLMs to take actions (like executing code in Unity)
 - **Prompts**: Defining interaction templates (like how to create GameObjects)
 
+YetAnotherUnityMcp implements the official MCP specification with full compliance, including:
+- Content-array based responses
+- URI-based resource descriptors
+- Required parameter arrays at schema level
+- MIME type specifications for resources
+
 ## Features
 
 - Execute C# code in Unity from AI agents

@@ -13,6 +13,7 @@ This architecture cleanly separates the game engine concerns from the AI logic, 
 1. **Don't run code directly**: The Python venv is Windows-based while Claude runs on WSL - running tests directly will fail.
 2. **Update documentation**: Every time a new feature is implemented, update the relevant documentation in this file, README.md, and TECH_DETAILS.md to reflect the changes.
 3. **Keep code and documentation in sync**: Ensure schema definitions, function signatures, and documentation stay consistent.
+4. **Don't maintain backward compatibility**: When implementing new features or fixing issues, prioritize correctness and adherence to specifications over backward compatibility. It's better to break existing code and fix it properly than to maintain compatibility with incorrect implementations.
 
 ## Project Architecture
 The project follows a server-client architecture with Unity hosting a TCP server and Python acting as the TCP client. The Python client then provides MCP protocol functionality for AI integration.

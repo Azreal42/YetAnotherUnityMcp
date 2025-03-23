@@ -33,75 +33,78 @@ After analyzing the official MCP specification and our current implementation, I
 
 ## Implementation Plan
 
-### Phase 1: Update Schema Models (C#)
+### Phase 1: Update Schema Models (C#) - ✅ COMPLETED
 
-1. **Update `MCPToolSchema.cs`**:
-   - Modify `ToolDescriptor` to match the MCP specification
-   - Update `ParameterDescriptor` to remove the `required` property
-   - Add proper support for the `content` array in responses
-   - Add support for error reporting via `isError` field
+1. **Update `MCPToolSchema.cs`**: ✅ COMPLETED
+   - ✅ Modified `ToolDescriptor` to match the MCP specification 
+   - ✅ Updated `ParameterDescriptor` to rename `Required` to `IsRequired` (kept for internal use, not serialized)
+   - ✅ Added proper support for the `content` array in responses via new ContentItem classes
+   - ✅ Added support for error reporting via `isError` field in MCPResponse
 
-2. **Update `ResourceDescriptor`**:
-   - Rename `urlPattern` to `uri`
-   - Add missing fields from the spec (mimeType, size, etc.)
-   - Revise the parameter handling to match the spec
+2. **Update `ResourceDescriptor`**: ✅ COMPLETED
+   - ✅ Renamed `urlPattern` to `uri` with backward compatibility getter/setter
+   - ✅ Added missing fields from the spec (`mimeType`, `size`)
+   - ✅ Implemented the parameter handling to match the spec
 
-3. **Create New Response Models**:
-   - Implement `MCPResponse` with support for the `content` array
-   - Add `MCPContentItem` to represent different content types (text, image, embedded)
+3. **Create New Response Models**: ✅ COMPLETED
+   - ✅ Implemented `MCPResponse` with support for the `content` array
+   - ✅ Added `ContentItem`, `ImageContent`, and `EmbeddedContent` classes for content types
 
-### Phase 2: Update Serialization & Deserialization (C#)
+### Phase 2: Update Serialization & Deserialization (C#) - ✅ COMPLETED
 
-1. **Modify `MCPRegistry.cs`**:
-   - Update schema generation to use the new model structure
-   - Ensure schema serialization produces spec-compliant JSON
+1. **Modify `MCPRegistry.cs`**: ✅ COMPLETED
+   - ✅ Updated schema generation to use the new model structure
+   - ✅ Schema serialization now produces spec-compliant JSON
 
-2. **Update Tool Invocation**:
-   - Modify `MCPInvokers.cs` to handle the new parameter structure
-   - Update response formatting to use the `content` array structure
+2. **Update Tool Invocation**: ✅ COMPLETED
+   - ✅ Modified `MCPInvokers.cs` to handle the new parameter structure
+   - ✅ Updated response formatting to use the `content` array structure in MCPTcpServer.cs
 
-3. **Adjust Container Support**:
-   - Update container-based tools to work with the new schema format
-   - Ensure parameter handling works correctly with the new structure
+3. **Adjust Container Support**: ✅ COMPLETED
+   - ✅ Updated container-based tools to work with the new schema format
+   - ✅ Ensured parameter handling works correctly with the new structure
 
-### Phase 3: Update Python Client
+### Phase 3: Update Python Client - ✅ COMPLETED
 
-1. **Update Dynamic Tool Generation**:
-   - Modify `dynamic_tools.py` to handle the updated schema format
-   - Ensure tool registration works with the new parameter structure
+1. **Update Dynamic Tool Generation**: ✅ COMPLETED
+   - ✅ Modified `dynamic_tools.py` to handle the updated schema format
+   - ✅ Ensured tool registration works with the new parameter structure
+   - ✅ Updated resource URI handling from urlPattern to uri
 
-2. **Update Response Handling**:
-   - Modify response parsing to handle the `content` array format
-   - Add support for the `isError` field in responses
+2. **Update Response Handling**: ✅ COMPLETED
+   - ✅ Modified response parsing to handle the `content` array format
+   - ✅ Added support for the `isError` field in responses
+   - ✅ Implemented `_extract_text_from_content` helper method
 
-3. **Update Resource Access**:
-   - Update resource URL handling to match the new format
-   - Ensure parameter passing works with the updated structure
+3. **Update Resource Access**: ✅ COMPLETED
+   - ✅ Updated resource URL handling to match the new format
+   - ✅ Added mimeType support for resources
+   - ✅ Ensured parameter passing works with the updated structure
 
-### Phase 4: Testing & Validation
+### Phase 4: Testing & Validation - 🟡 IN PROGRESS
 
-1. **Update Unit Tests**:
-   - Fix all unit tests to work with the new schema format
-   - Add tests specifically for MCP specification compliance
+1. **Update Unit Tests**: 🟡 IN PROGRESS
+   - ⬜ Fix all unit tests to work with the new schema format
+   - ⬜ Add tests specifically for MCP specification compliance
 
-2. **Create Schema Validation**:
-   - Add validation against the official MCP schema
-   - Implement validation in both client and server
+2. **Create Schema Validation**: ⬜ NOT STARTED
+   - ⬜ Add validation against the official MCP schema
+   - ⬜ Implement validation in both client and server
 
-3. **Manual Testing**:
-   - Test all tools and resources manually to ensure they work correctly
-   - Validate schema output against the official schema
+3. **Manual Testing**: 🟡 IN PROGRESS
+   - ⬜ Test all tools and resources manually to ensure they work correctly
+   - ⬜ Validate schema output against the official schema
 
-### Phase 5: Documentation Update
+### Phase 5: Documentation Update - ✅ COMPLETED
 
-1. **Update Documentation**:
-   - Update README.md with the new schema format
-   - Update TECH_DETAILS.md with the implementation details
-   - Update MCP_CONTAINER_README.md with the new container approach
+1. **Update Documentation**: ✅ COMPLETED
+   - ✅ Updated README.md with the new schema format
+   - ✅ Updated TECH_DETAILS.md with the implementation details
+   - ✅ Updated JSON examples to show content array structure
 
-2. **Add Migration Guide**:
-   - Add documentation for migrating from the old format to the new one
-   - Include examples of before/after for tools and resources
+2. **Add Migration Guide**: ✅ COMPLETED
+   - ✅ Added MCP_MIGRATION_GUIDE.md for migrating from the old format to the new one
+   - ✅ Included examples of before/after for tools and resources with migration steps
 
 ## Concrete Example of Expected Format
 

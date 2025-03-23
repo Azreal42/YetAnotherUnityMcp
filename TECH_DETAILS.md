@@ -93,9 +93,13 @@ Sent from Unity back to the client as a reply to a request. It echoes the same `
   "type": "response",
   "status": "success",
   "result": {
-    "output": "Hello from AI", 
-    "logs": ["Hello from AI"], 
-    "returnValue": null
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello from AI"
+      }
+    ],
+    "isError": false
   },
   "server_timestamp": 1710956378456,
   "client_timestamp": 1710956378123
@@ -109,6 +113,15 @@ For errors:
   "id": "req_101",
   "type": "response",
   "status": "error",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "NullReferenceException at line 1 ..."
+      }
+    ],
+    "isError": true
+  },
   "error": "NullReferenceException at line 1 ...",
   "server_timestamp": 1710956378456,
   "client_timestamp": 1710956378123
@@ -125,9 +138,20 @@ For commands that produce image data (such as a screenshot capture tool), the Un
   "type": "response",
   "status": "success",
   "result": {
-    "filePath": "/path/to/screenshot.png",
-    "width": 1280,
-    "height": 720
+    "content": [
+      {
+        "type": "image",
+        "image": {
+          "url": "/path/to/screenshot.png",
+          "mimeType": "image/png"
+        }
+      },
+      {
+        "type": "text",
+        "text": "Screenshot captured with dimensions 1280x720"
+      }
+    ],
+    "isError": false
   },
   "server_timestamp": 1710956379456,
   "client_timestamp": 1710956379123
@@ -219,6 +243,28 @@ The system is designed to handle errors gracefully and maintain security:
 
 5. **Connection Monitoring**: Performance metrics are tracked and logged for monitoring connection health.
 
+## Thread-Local Context Management
+
+The system uses thread-local storage via the `ResourceContext` class to handle passing context objects across the resource access pipeline:
+
+1. **Purpose and Role**:
+   - `ResourceContext` provides thread-local storage for passing the `Context` object across resource handlers
+   - It solves a specific architectural challenge: the FastMCP library requires resource handler functions to have signatures that exactly match URI parameters, but these handlers also need access to the `Context` object to log information and handle errors
+
+2. **Implementation**:
+   - Uses `threading.local()` for thread-safe storage of the current context
+   - Provides `get_current_ctx()` and `set_current_ctx()` methods for accessing/setting the current context
+   - Includes a context manager (`with_context()`) for setting and restoring context in a scoped manner
+   - Supports nested contexts within the same thread
+
+3. **Usage Pattern**:
+   - When resource handlers are registered, they have signatures matching only the URI parameters
+   - Before invoking the resource handler, the system sets the current context using the context manager
+   - Within the resource handler, `ResourceContext.get_current_ctx()` provides access to the context without it appearing in the function signature
+   - After the handler completes, the original context is automatically restored
+
+This approach maintains compatibility with FastMCP's interface validation while providing access to important context information. While it introduces some indirection through thread-local storage, this is a common pattern in web frameworks and request handling systems where direct parameter passing isn't feasible.
+
 ## Schema System
 
 The system includes a schema retrieval mechanism that provides self-documentation of available tools and resources. This allows clients to discover what operations are available without hardcoding knowledge of the API.
@@ -238,31 +284,10 @@ The schema information is organized as follows:
         "properties": {
           "code": {
             "type": "string",
-            "description": "C# code to execute",
-            "required": true
+            "description": "C# code to execute"
           }
         },
         "required": ["code"]
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "output": {
-            "type": "string",
-            "description": "String representation of the return value",
-            "required": true
-          },
-          "logs": {
-            "type": "array",
-            "description": "Array of log messages generated during execution",
-            "required": true
-          },
-          "returnValue": {
-            "type": "object",
-            "description": "The actual return value (if serializable)",
-            "required": false
-          }
-        }
       },
       "example": "execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")"
     }
@@ -271,32 +296,8 @@ The schema information is organized as follows:
     {
       "name": "unity_info",
       "description": "Get information about the Unity environment",
-      "urlPattern": "unity://info",
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "unityVersion": {
-            "type": "string",
-            "description": "Version of Unity Editor",
-            "required": true
-          },
-          "platform": {
-            "type": "string",
-            "description": "Platform the Unity Editor is running on",
-            "required": true
-          },
-          "isPlaying": {
-            "type": "boolean",
-            "description": "Whether the Unity Editor is in play mode",
-            "required": true
-          },
-          "activeScenes": {
-            "type": "array",
-            "description": "List of active scene names",
-            "required": true
-          }
-        }
-      },
+      "uri": "unity://info",
+      "mimeType": "application/json",
       "example": "unity://info"
     }
   ]
@@ -336,12 +337,25 @@ The schema system uses C# attributes for automatic schema generation. This allow
    - Removing suffix words like "Command" or "Resource" 
    - For example: `TakeScreenshotCommand` → `take_screenshot`
 
-6. **Dynamic Invocation**:
-   The system provides a standardized way to dynamically invoke resources and tools:
+6. **Dynamic Invocation and Parameter Mapping**:
+   The system provides a standardized way to dynamically invoke resources and tools with robust parameter handling:
    - `ResourceInvoker.InvokeResource(string resourceName, Dictionary<string, object> parameters)`: Invokes a resource by name
    - `ToolInvoker.InvokeTool(string toolName, Dictionary<string, object> parameters)`: Invokes a tool by name
    - Both methods handle parameter mapping, type conversion, and proper error handling
    - Used by the TCP server to handle `access_resource` and other dynamic commands
+   
+   **Parameter Naming Convention Handling**:
+   - The system automatically converts between different parameter naming conventions
+   - Unity uses camelCase for parameters (e.g., `objectId`, `sceneName`)
+   - Python client code uses snake_case (e.g., `object_id`, `scene_name`) as is standard in Python
+   - The parameter mapping system handles this conversion automatically:
+     - In Python code, use snake_case parameter names (e.g., `object_id`, `property_name`) 
+     - When sending to Unity, these names are automatically converted to camelCase (e.g., `objectId`, `propertyName`)
+     - This conversion happens in the `invoke_dynamic_resource` and `invoke_dynamic_tool` functions
+   - This makes the API more ergonomic for Python developers while maintaining compatibility with Unity's expected parameter formats
+   - Examples:
+     - Python: `await invoke_dynamic_resource("object_properties", {"object_id": "Cube", "property_name": "position"})`
+     - Converted to: `{"objectId": "Cube", "propertyName": "position"}` before sending to Unity
 
 7. **Testing**:
    The schema and invocation systems are thoroughly tested using NUnit tests:
@@ -434,17 +448,29 @@ Clients can retrieve the schema using the `get_schema` command, which returns a 
 
 The Python MCP client can dynamically register tools and resources based on the schema received from Unity. This allows the Python side to automatically adapt to changes in the Unity API without requiring code changes. The dynamic registration process works as follows:
 
-1. **Connection Event**: When the WebSocket client successfully connects to Unity, it automatically retrieves the schema.
+1. **Connection Event**: When the client successfully connects to Unity, it automatically retrieves the schema.
 
-2. **Schema Processing**: The `DynamicToolManager` processes the schema to extract tool and resource information.
+2. **Schema Processing**: The `DynamicToolManager` processes the schema to extract tool and resource information. This includes handling multiple possible schema formats:
+   - Direct schema with tools and resources at the top level
+   - Schema wrapped in a result object
+   - Schema embedded in a content array as a text element
+   - Various other MCP-compliant response formats
 
 3. **Tool Registration**: For each tool in the schema, a dynamic function is created and registered with FastMCP.
+   - Tools are registered with their proper input parameters and descriptions
+   - The system creates properly-typed tool handlers that respect the MCP interface
 
-4. **Resource Registration**: For each resource in the schema, a dynamic resource handler is created and registered with FastMCP.
+4. **Resource Registration**: For each resource in the schema, it's stored in the manager's registry.
+   - Resource URIs and parameters are extracted and stored
+   - This allows tools to reference and use resources by name
 
 5. **Parameter Mapping**: The dynamic functions automatically map parameters from the schema to the function signature.
+   - Tool parameters are mapped from the schema definition to the actual function call
+   - Type conversions are handled automatically
 
 6. **Command Execution**: When a dynamic tool is invoked, the parameters are mapped to the command and sent to Unity.
+   - The unified access_resource command is used for all resource access
+   - This provides a consistent interface regardless of resource complexity
 
 This system provides several benefits:
 
@@ -452,12 +478,14 @@ This system provides several benefits:
 - **No Code Generation**: No code generation or manual updates are required when new tools are added to Unity.
 - **Self-Documenting**: The schema provides complete documentation of available tools and their parameters.
 - **Type Safety**: Parameter types from the schema are used to validate inputs.
+- **Robust Schema Parsing**: The system can handle various schema formats and extract tools/resources correctly.
+- **Error Resilience**: The registration process can continue even if some tools or resources fail to register.
 
 Example of dynamic tool registration:
 
 ```python
 # Get the dynamic tool manager
-from server.mcp.dynamic_tools import get_manager
+from server.dynamic_tools import get_manager
 manager = get_manager(mcp_instance)
 
 # Register tools from schema

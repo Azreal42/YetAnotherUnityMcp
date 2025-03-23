@@ -104,9 +104,20 @@ class UnityTcpClient:
             parameters: Command parameters
             
         Returns:
-            Command result
+            Command result in the MCP content array format, or legacy format for backward compatibility
         """
-        return await self.tcp_client.send_command(command, parameters)
+        result = await self.tcp_client.send_command(command, parameters)
+        
+        # Check if this is an MCP-format response
+        if isinstance(result, dict) and "content" in result:
+            # Process MCP response format
+            logger.debug(f"Received MCP response for command {command}")
+            
+            # Include some helpful information when returning to callers
+            if "isError" in result and result["isError"]:
+                logger.warning(f"MCP error response for command {command}")
+        
+        return result
     
     def on(self, event: str, callback: Callable) -> None:
         """

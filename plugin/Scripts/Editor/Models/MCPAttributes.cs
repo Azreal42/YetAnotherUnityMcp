@@ -94,9 +94,14 @@ namespace YetAnotherUnityMcp.Editor.Models
         public string Name { get; set; }
         
         /// <summary>
-        /// URL pattern for accessing the resource
+        /// URI pattern for accessing the resource (formerly UrlPattern)
         /// </summary>
         public string UrlPattern { get; set; }
+        
+        /// <summary>
+        /// MIME type of the resource
+        /// </summary>
+        public string MimeType { get; set; } = "application/json";
         
         /// <summary>
         /// Example usage of the resource
@@ -108,13 +113,15 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         /// <param name="name">Name of the resource. If null, will be inferred from the method name.</param>
         /// <param name="description">Description of the resource</param>
-        /// <param name="urlPattern">URL pattern for accessing the resource</param>
+        /// <param name="urlPattern">URI pattern for accessing the resource (formerly UrlPattern)</param>
         /// <param name="example">Example usage of the resource</param>
-        public MCPResourceAttribute(string name = null, string description = null, string urlPattern = null, string example = null) : base(description)
+        /// <param name="mimeType">MIME type of the resource</param>
+        public MCPResourceAttribute(string name = null, string description = null, string urlPattern = null, string example = null, string mimeType = "application/json") : base(description)
         {
             Name = name;
             UrlPattern = urlPattern;
             Example = example;
+            MimeType = mimeType;
         }
     }
     
@@ -159,7 +166,16 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <summary>
         /// Whether the parameter is required
         /// </summary>
-        public bool Required { get; set; }
+        public bool IsRequired { get; set; }
+        
+        /// <summary>
+        /// Legacy property for backwards compatibility (forwards to IsRequired)
+        /// </summary>
+        public bool Required 
+        { 
+            get { return IsRequired; }
+            set { IsRequired = value; }
+        }
         
         /// <summary>
         /// Create a new MCP parameter attribute
@@ -172,7 +188,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             Name = name;
             Type = type;
-            Required = required;
+            IsRequired = required;
         }
     }
 }

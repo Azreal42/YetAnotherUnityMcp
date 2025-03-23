@@ -231,7 +231,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                     Description = toolAttr.Description ?? $"Tool for {method.Name}",
                     Example = toolAttr.Example,
                     InputSchema = MCPAttributeUtil.GetSchemaFromMethodParameters(method),
-                    OutputSchema = MCPAttributeUtil.GetSchemaFromReturnType(method),
+                    // OutputSchema removed in MCP specification compliance
                     MethodInfo = method,
                     ContainerType = containerType
                 };
@@ -275,9 +275,10 @@ namespace YetAnotherUnityMcp.Editor.Models
                 {
                     Name = resourceName,
                     Description = resourceAttr.Description ?? $"Resource for {method.Name}",
-                    UrlPattern = resourceAttr.UrlPattern ?? $"unity://{resourceName}",
+                    Uri = resourceAttr.UrlPattern ?? $"unity://{resourceName}", // Now using Uri property (renamed from UrlPattern)
                     Example = resourceAttr.Example,
-                    OutputSchema = MCPAttributeUtil.GetSchemaFromReturnType(method),
+                    MimeType = resourceAttr.MimeType ?? "application/json", // Add MIME type support
+                    // OutputSchema removed in MCP specification compliance
                     MethodInfo = method,
                     ContainerType = containerType
                 };
