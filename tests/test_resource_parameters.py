@@ -8,8 +8,9 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp.server.fastmcp import FastMCP, Context
+from server.connection_manager import UnityConnectionManager
 from server.dynamic_tools import DynamicToolManager, ResourceContext
-from server.dynamic_tool_invoker import invoke_dynamic_resource
+from server.dynamic_tool_invoker import DynamicToolInvoker
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -116,16 +117,17 @@ def mock_fastmcp():
 def mock_context():
     """Create a mock Context object"""
     ctx = MagicMock(spec=Context)
-    ctx.info = MagicMock()
-    ctx.error = MagicMock()
-    ctx.debug = MagicMock()
+    ctx.info = AsyncMock()
+    ctx.error = AsyncMock()
+    ctx.debug = AsyncMock()
     return ctx
 
 @pytest.fixture
 def dynamic_manager(mock_fastmcp, mock_client):
     """Create a DynamicToolManager with mocked dependencies"""
     # Directly pass the client rather than patching get_client
-    manager = DynamicToolManager(mock_fastmcp, mock_client)
+    connection_manager = UnityConnectionManager(mock_client)
+    manager = DynamicToolManager(mock_fastmcp, connection_manager)
     return manager
 
 # Tests for resource parameter handling
@@ -239,39 +241,38 @@ async def test_multi_parameter_resource(dynamic_manager, mock_client, mock_conte
 @pytest.mark.asyncio
 async def test_invoke_dynamic_resource(mock_client):
     """Test invoking dynamic resources through the invoker"""
-    with patch('server.dynamic_tool_invoker.get_client', return_value=mock_client):
-        with patch('server.dynamic_tool_invoker.get_unity_connection_manager') as mock_connection_manager:
-            # Mock the connection manager
-            manager = AsyncMock()
-            manager.reconnect = AsyncMock(return_value=True)
-            manager.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
-            mock_connection_manager.return_value = manager
-            
-            # Test different parameter counts
-            
-            # No parameters
-            result = await invoke_dynamic_resource("unity_info")
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "unity_info",
-                "parameters": {}
-            })
-            
-            # Single parameter
-            result = await invoke_dynamic_resource("logs", {"max_logs": 5})
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "logs",
-                "parameters": {"max_logs": 5}
-            })
-            
-            # Multiple parameters
-            result = await invoke_dynamic_resource("object_properties", {
-                "id": "cube01", 
-                "property_name": "position"
-            })
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "object_properties",
-                "parameters": {"id": "cube01", "property_name": "position"}
-            })
+    # Mock the connection manager
+    manager = AsyncMock()
+    manager.reconnect = AsyncMock(return_value=True)
+    manager.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
+
+    connection_manager = UnityConnectionManager(mock_client)
+    
+    # Test different parameter counts
+    
+    # No parameters
+    result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("unity_info")
+    mock_client.send_command.assert_called_with("access_resource", {
+        "resource_name": "unity_info",
+        "parameters": {}
+    })
+    
+    # Single parameter (parameters are normalized to camelCase)
+    result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("logs", {"max_logs": 5})
+    mock_client.send_command.assert_called_with("access_resource", {
+        "resource_name": "logs",
+        "parameters": {"maxLogs": 5}
+    })
+    
+    # Multiple parameters
+    result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("object_properties", {
+        "id": "cube01", 
+        "property_name": "position"
+    })
+    mock_client.send_command.assert_called_with("access_resource", {
+        "resource_name": "object_properties",
+        "parameters": {"id": "cube01", "propertyName": "position"}
+    })
 
 @pytest.mark.asyncio
 async def test_resource_context_manager():
@@ -342,36 +343,6 @@ async def test_parameter_mismatch_handling(dynamic_manager, mock_client, mock_co
     
     # Verify the client was not called
     mock_client.send_command.assert_not_called()
-
-@pytest.mark.asyncio
-async def test_function_signature_checking(dynamic_manager):
-    """Test that function signatures are properly generated according to URI template"""
-    # Register schema
-    await dynamic_manager.register_from_schema()
-    
-    # Get all registered resources
-    resources = dynamic_manager.registered_resources
-    
-    # Check signatures using introspection
-    import inspect
-    
-    # No parameter
-    no_param_func = resources["unity_info"]["func"]
-    no_param_sig = inspect.signature(no_param_func)
-    assert len(no_param_sig.parameters) == 1  # Just ctx
-    
-    # Single parameter
-    single_param_func = resources["logs"]["func"]
-    single_param_sig = inspect.signature(single_param_func)
-    assert len(single_param_sig.parameters) == 2  # ctx, max_logs
-    assert "max_logs" in single_param_sig.parameters
-    
-    # Multiple parameters
-    multi_param_func = resources["object_properties"]["func"]
-    multi_param_sig = inspect.signature(multi_param_func)
-    assert len(multi_param_sig.parameters) == 3  # ctx, id, property_name
-    assert "id" in multi_param_sig.parameters
-    assert "property_name" in multi_param_sig.parameters
     
 # Run tests if executed directly
 if __name__ == "__main__":

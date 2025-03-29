@@ -8,7 +8,7 @@ import json
 import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context
 from server.dynamic_tools import DynamicToolManager
 
 # Mock FunctionResource for testing
@@ -90,12 +90,6 @@ TEST_SCHEMA = {
     ]
 }
 
-# Fixture for FastMCP instance
-@pytest.fixture
-def mcp_instance():
-    """Create a FastMCP instance for testing"""
-    return FastMCP("Test FastMCP", description="MCP instance for testing")
-
 # Fixtures for mocking
 @pytest.fixture
 def mock_client():
@@ -163,9 +157,9 @@ def mock_fastmcp():
 def mock_context():
     """Create a mock Context object"""
     ctx = MagicMock(spec=Context)
-    ctx.info = MagicMock()
-    ctx.error = MagicMock()
-    ctx.debug = MagicMock()
+    ctx.info = AsyncMock()
+    ctx.error = AsyncMock()
+    ctx.debug = AsyncMock()
     return ctx
 
 @pytest.fixture
@@ -259,7 +253,8 @@ def real_client():
     
     Note: Assumes Unity is running with MCP plugin loaded
     """
-    return get_client()
+    from server.unity_tcp_client import UnityTcpClient
+    return UnityTcpClient()
 
 @pytest.fixture
 async def connected_client(real_client):

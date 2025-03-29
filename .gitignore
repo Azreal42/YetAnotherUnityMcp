@@ -50,3 +50,4 @@ repomix-output.xml
 # Debug schema files
 *_schema_debug.json
 *_schema_debug_*.json
+schema_debug.json

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Dict, Any, List, Optional
 
 from mcp.server.fastmcp import FastMCP
-from server.dynamic_tools import DynamicToolManager, get_manager
+from server.dynamic_tools import DynamicToolManager
 
 # Helper function for invoking dynamic resources
 async def invoke_dynamic_resource(client, resource_name: str, parameters: Optional[Dict[str, Any]] = None):
@@ -509,66 +509,62 @@ class TestDynamicResourcesMocked:
     @pytest.mark.asyncio
     async def test_mocked_resource_invocation(self, mock_unity_client, mcp_test_instance):
         """Test invoking resources with mocked client"""
-        # Create dynamic tool manager
-        with patch('server.dynamic_tools.get_client', return_value=mock_unity_client),\
-             patch('server.dynamic_tool_invoker.get_client', return_value=mock_unity_client),\
-             patch('server.dynamic_tool_invoker.get_unity_connection_manager') as mock_connection_manager:
-            
-            # Mock the connection manager
-            manager_mock = AsyncMock()
-            manager_mock.reconnect = AsyncMock(return_value=True)
-            manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
-            mock_connection_manager.return_value = manager_mock
-            
-            # Register tools with client directly
-            tool_manager = DynamicToolManager(mcp_test_instance, mock_unity_client)
-            await tool_manager.register_from_schema()
-            
-            # Test invoking resources with different parameter counts
-            
-            # No parameters
-            result = await invoke_dynamic_resource("unity_info")
-            assert result is not None, "Resource invocation returned None"
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "unityVersion" in text_content, "unity_info resource did not return expected content"
-            
-            # Single parameter
-            result = await invoke_dynamic_resource("logs", {"max_logs": 3})
-            assert result is not None, "Resource invocation returned None"
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "Log message" in text_content, "logs resource did not return expected content"
-            
-            # Multiple parameters
-            result = await invoke_dynamic_resource("object_properties", {
-                "id": "test_cube", 
-                "property_name": "position"
-            })
-            assert result is not None, "Resource invocation returned None"
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "test_cube" in text_content, "object_properties resource did not return expected id"
-                    assert "position" in text_content, "object_properties resource did not return expected property"
-            
-            # Multiple parameters (scene)
-            result = await invoke_dynamic_resource("scene", {
-                "scene_name": "TestScene", 
-                "detail_level": "high"
-            })
-            assert result is not None, "Resource invocation returned None"
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "TestScene" in text_content, "scene resource did not return expected scene name"
-                    assert "high" in text_content, "scene resource did not return expected detail level"
+        
+        # Mock the connection manager
+        manager_mock = AsyncMock()
+        manager_mock.reconnect = AsyncMock(return_value=True)
+        manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
+
+        
+        # Register tools with client directly
+        tool_manager = DynamicToolManager(mcp_test_instance, manager_mock)
+        await tool_manager.register_from_schema()
+        
+        # Test invoking resources with different parameter counts
+        
+        # No parameters
+        result = await invoke_dynamic_resource("unity_info")
+        assert result is not None, "Resource invocation returned None"
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "unityVersion" in text_content, "unity_info resource did not return expected content"
+        
+        # Single parameter
+        result = await invoke_dynamic_resource("logs", {"max_logs": 3})
+        assert result is not None, "Resource invocation returned None"
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "Log message" in text_content, "logs resource did not return expected content"
+        
+        # Multiple parameters
+        result = await invoke_dynamic_resource("object_properties", {
+            "id": "test_cube", 
+            "property_name": "position"
+        })
+        assert result is not None, "Resource invocation returned None"
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "test_cube" in text_content, "object_properties resource did not return expected id"
+                assert "position" in text_content, "object_properties resource did not return expected property"
+        
+        # Multiple parameters (scene)
+        result = await invoke_dynamic_resource("scene", {
+            "scene_name": "TestScene", 
+            "detail_level": "high"
+        })
+        assert result is not None, "Resource invocation returned None"
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "TestScene" in text_content, "scene resource did not return expected scene name"
+                assert "high" in text_content, "scene resource did not return expected detail level"
     
     def _generate_test_value(self, param_name: str) -> Any:
         """Generate a test value based on parameter name"""

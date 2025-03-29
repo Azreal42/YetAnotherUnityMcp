@@ -17,18 +17,45 @@ from server.unity_client_util import UnityClientUtil
 
 # Add ResourceContext class to store context in thread-local storage
 class ResourceContext:
-    """Thread-local storage for resource context"""
+    """Thread-local and task-local storage for resource context"""
     _thread_local = threading.local()
+    _task_contexts = {}  # Dictionary to store task_id -> context mapping
     
     @classmethod
     def get_current_ctx(cls) -> Optional[Context]:
-        """Get the current context from thread-local storage"""
+        """Get the current context from thread-local or task-local storage"""
+        # First try to get task-specific context if in an asyncio task
+        import asyncio
+        try:
+            current_task = asyncio.current_task()
+            if current_task and id(current_task) in cls._task_contexts:
+                return cls._task_contexts[id(current_task)]
+        except (RuntimeError, ImportError):
+            # If we're not in an asyncio event loop or asyncio is not available
+            pass
+            
+        # Fall back to thread-local storage
         return getattr(cls._thread_local, "ctx", None)
     
     @classmethod
     def set_current_ctx(cls, ctx: Optional[Context]) -> None:
-        """Set the current context in thread-local storage"""
+        """Set the current context in both thread-local and task-local storage"""
+        # Store in thread-local storage
         cls._thread_local.ctx = ctx
+        
+        # Also store in task-specific storage if in an asyncio task
+        import asyncio
+        try:
+            current_task = asyncio.current_task()
+            if current_task:
+                if ctx is None and id(current_task) in cls._task_contexts:
+                    # Remove task from contexts when setting to None
+                    del cls._task_contexts[id(current_task)]
+                else:
+                    cls._task_contexts[id(current_task)] = ctx
+        except (RuntimeError, ImportError):
+            # If we're not in an asyncio event loop or asyncio is not available
+            pass
     
     @classmethod
     def with_context(cls, ctx: Context):
@@ -47,6 +74,16 @@ class ResourceContext:
                 cls.set_current_ctx(self.prev_ctx)
                 
         return ContextManager(ctx)
+        
+    @classmethod
+    def clear_all_contexts(cls):
+        """Clear all stored contexts - useful for testing and cleanup"""
+        # Clear thread-local storage
+        if hasattr(cls._thread_local, "ctx"):
+            delattr(cls._thread_local, "ctx")
+        
+        # Clear task contexts dictionary
+        cls._task_contexts.clear()
 
 logger = logging.getLogger("dynamic_tools")
 
@@ -327,6 +364,11 @@ class DynamicToolManager:
             
             # Add any keyword args
             param_dict.update(kwargs)
+            
+            # Check if all required parameters are provided
+            if len(parameters) > 0 and len(param_dict) < len(parameters):
+                missing_params = set(parameters) - set(param_dict.keys())
+                raise TypeError(f"Missing required parameters for resource {resource_name}: {', '.join(missing_params)}")
             
             logger.info(f"Accessing dynamic resource {resource_name} with params: {param_dict}")
             

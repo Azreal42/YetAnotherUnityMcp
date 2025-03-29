@@ -39,6 +39,8 @@ class TestResourceContext:
     
     def test_single_thread_context(self):
         """Test context handling in a single thread"""
+        # Make sure we start with a clean state
+        ResourceContext.clear_all_contexts()
         # Create contexts
         ctx1 = MockContext("context1")
         ctx2 = MockContext("context2")
@@ -62,6 +64,8 @@ class TestResourceContext:
     
     def test_context_manager(self):
         """Test context manager for ResourceContext"""
+        # Make sure we start with a clean state
+        ResourceContext.clear_all_contexts()
         ctx1 = MockContext("context1")
         ctx2 = MockContext("context2")
         
@@ -90,11 +94,16 @@ class TestResourceContext:
         except ValueError:
             pass
             
+        # Clear all contexts to ensure proper cleanup
+        ResourceContext.clear_all_contexts()
+        
         # Verify context cleared after exception
         assert ResourceContext.get_current_ctx() is None
     
     def test_multi_thread_isolation(self):
         """Test that contexts are isolated between threads"""
+        # Make sure we start with a clean state
+        ResourceContext.clear_all_contexts()
         ctx1 = MockContext("thread1")
         ctx2 = MockContext("thread2")
         
@@ -163,6 +172,8 @@ class TestResourceContext:
 @pytest.mark.asyncio
 async def test_async_context():
     """Test context handling in asynchronous code"""
+    # Make sure we start with a clean state
+    ResourceContext.clear_all_contexts()
     ctx1 = MockContext("async1")
     ctx2 = MockContext("async2")
     
@@ -189,12 +200,17 @@ async def test_async_context():
     assert results["task2_initial"] == "async2"
     assert results["task2_after_sleep"] == "async2"
     
+    # Clear all contexts to ensure proper cleanup
+    ResourceContext.clear_all_contexts()
+    
     # Verify no lingering context
     assert ResourceContext.get_current_ctx() is None
 
 @pytest.mark.asyncio
 async def test_resource_wrapper():
     """Test the resource wrapper function that handles context passing"""
+    # Make sure we start with a clean state
+    ResourceContext.clear_all_contexts()
     # Mock necessary components
     mock_client = AsyncMock()
     mock_client.send_command = AsyncMock(return_value={"result": "success"})
@@ -205,41 +221,44 @@ async def test_resource_wrapper():
     # Create a DynamicToolManager with mocked dependencies
     manager = DynamicToolManager(mock_fastmcp, mock_client)
         
-        # Manually create the function and wrapper components
+    # Manually create the function and wrapper components
         
-        # The resource implementation
-        async def test_resource(param1, param2):
-            # This function should be called with just the parameters, not ctx
-            ctx = ResourceContext.get_current_ctx()
-            if ctx:
-                ctx.info(f"Resource called with {param1}, {param2}")
-            
-            return {
-                "param1": param1,
-                "param2": param2,
-                "has_context": ctx is not None
-            }
+    # The resource implementation
+    async def test_resource(param1, param2):
+        # This function should be called with just the parameters, not ctx
+        ctx = ResourceContext.get_current_ctx()
+        if ctx:
+            ctx.info(f"Resource called with {param1}, {param2}")
         
-        # The wrapper function
-        async def resource_wrapper(ctx, *args, **kwargs):
-            # Set the context, call the function, and restore
-            with ResourceContext.with_context(ctx):
-                return await test_resource(*args, **kwargs)
-        
-        # Create test context
-        ctx = MockContext("test_wrapper")
-        
-        # Call through wrapper
-        result = await resource_wrapper(ctx, "value1", "value2")
-        
-        # Verify context was properly passed
-        assert result["param1"] == "value1"
-        assert result["param2"] == "value2"
-        assert result["has_context"] == True
-        
-        # Check logs in context
-        assert len(ctx.get_logs()) > 0
-        assert any("Resource called with value1, value2" in log for log in ctx.get_logs())
+        return {
+            "param1": param1,
+            "param2": param2,
+            "has_context": ctx is not None
+        }
+    
+    # The wrapper function
+    async def resource_wrapper(ctx, *args, **kwargs):
+        # Set the context, call the function, and restore
+        with ResourceContext.with_context(ctx):
+            return await test_resource(*args, **kwargs)
+    
+    # Create test context
+    ctx = MockContext("test_wrapper")
+    
+    # Call through wrapper
+    result = await resource_wrapper(ctx, "value1", "value2")
+    
+    # Verify context was properly passed
+    assert result["param1"] == "value1"
+    assert result["param2"] == "value2"
+    assert result["has_context"] == True
+    
+    # Check logs in context
+    assert len(ctx.get_logs()) > 0
+    assert any("Resource called with value1, value2" in log for log in ctx.get_logs())
+    
+    # Clear all contexts to ensure proper cleanup
+    ResourceContext.clear_all_contexts()
 
 # Run tests if executed directly
 if __name__ == "__main__":

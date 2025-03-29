@@ -8,6 +8,7 @@ import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp.server.fastmcp import FastMCP, Context
+from server.connection_manager import UnityConnectionManager
 from server.dynamic_tools import DynamicToolManager, ResourceContext
 
 # Mock the FunctionResource class for testing
@@ -203,9 +204,9 @@ class TestUriParameterMatching:
     def mock_context(self):
         """Create a mock Context"""
         ctx = MagicMock(spec=Context)
-        ctx.info = MagicMock()
-        ctx.error = MagicMock()
-        ctx.debug = MagicMock()
+        ctx.info = AsyncMock()
+        ctx.error = AsyncMock()
+        ctx.debug = AsyncMock()
         return ctx
     
     @pytest.mark.asyncio
@@ -257,152 +258,147 @@ class TestUriParameterMatching:
         # Use our mocked FastMCP that performs validation
         mcp = MockFastMCP()
         mcp.set_context(mock_context)
+
+        connection_manager = UnityConnectionManager(mock_client)
         
-        # Create a dynamic tool manager with mocked dependencies
-        with patch('server.dynamic_tools.execute_unity_operation', 
-                   new=lambda op_name, op, ctx, error_prefix: asyncio.create_task(op())), \
-             patch('server.dynamic_tools.FunctionResource', MockFunctionResource):
+        manager = DynamicToolManager(mcp, connection_manager)
+        
+        # Register resources from schema
+        result = await manager.register_from_schema()
+        assert result is True
+        
+        # Check that resources were registered
+        assert "info" in mcp.registered_resources
+        assert "logs" in mcp.registered_resources
+        assert "scene" in mcp.registered_resources
+        assert "object" in mcp.registered_resources
+        assert "complex" in mcp.registered_resources
+        
+        # Debug print the resources
+        print("\nDEBUG: Registered resources content:")
+        for name, resource in mcp.registered_resources.items():
+            print(f"Resource {name}: {resource}")
+            # Verify the resource has uri field
+            if "uri" not in resource:
+                print(f"WARNING: Resource {name} has no 'uri' field")
+                # If it has uriTemplate, convert it to uri
+                if "uriTemplate" in resource:
+                    resource["uri"] = resource.pop("uriTemplate")
             
-            manager = DynamicToolManager(mcp, mock_client)
-            
-            # Register resources from schema
-            result = await manager.register_from_schema()
-            assert result is True
-            
-            # Check that resources were registered
-            assert "info" in mcp.registered_resources
-            assert "logs" in mcp.registered_resources
-            assert "scene" in mcp.registered_resources
-            assert "object" in mcp.registered_resources
-            assert "complex" in mcp.registered_resources
-            
-            # Debug print the resources
-            print("\nDEBUG: Registered resources content:")
-            for name, resource in mcp.registered_resources.items():
-                print(f"Resource {name}: {resource}")
-                # Verify the resource has uri field
-                if "uri" not in resource:
-                    print(f"WARNING: Resource {name} has no 'uri' field")
-                    # If it has uriTemplate, convert it to uri
-                    if "uriTemplate" in resource:
-                        resource["uri"] = resource.pop("uriTemplate")
-                
-            # Define the expected parameters directly
-            expected_params = {
-                "info": [],
-                "logs": ["max_logs"],
-                "scene": ["scene_name"],
-                "object": ["id", "property_name"],
-                "complex": ["type", "id", "attribute", "format"]
-            }
-            
-            # Override the uri_params for all expected resources
-            for name, params in expected_params.items():
-                if name in mcp.registered_resources:
-                    print(f"Setting uri_params for {name} to {params}")
-                    mcp.registered_resources[name]["uri_params"] = params
-            
-            # Verify parameter counts match URI patterns
-            assert len(mcp.registered_resources["info"]["uri_params"]) == 0
-            assert len(mcp.registered_resources["logs"]["uri_params"]) == 1
-            assert len(mcp.registered_resources["scene"]["uri_params"]) == 1
-            assert len(mcp.registered_resources["object"]["uri_params"]) == 2
-            assert len(mcp.registered_resources["complex"]["uri_params"]) == 4
-            
-            # Verify specific parameter names
-            assert mcp.registered_resources["logs"]["uri_params"] == ["max_logs"]
-            assert mcp.registered_resources["scene"]["uri_params"] == ["scene_name"]
-            assert mcp.registered_resources["object"]["uri_params"] == ["id", "property_name"]
-            assert mcp.registered_resources["complex"]["uri_params"] == ["type", "id", "attribute", "format"]
-            
+        # Define the expected parameters directly
+        expected_params = {
+            "info": [],
+            "logs": ["max_logs"],
+            "scene": ["scene_name"],
+            "object": ["id", "property_name"],
+            "complex": ["type", "id", "attribute", "format"]
+        }
+        
+        # Override the uri_params for all expected resources
+        for name, params in expected_params.items():
+            if name in mcp.registered_resources:
+                print(f"Setting uri_params for {name} to {params}")
+                mcp.registered_resources[name]["uri_params"] = params
+        
+        # Verify parameter counts match URI patterns
+        assert len(mcp.registered_resources["info"]["uri_params"]) == 0
+        assert len(mcp.registered_resources["logs"]["uri_params"]) == 1
+        assert len(mcp.registered_resources["scene"]["uri_params"]) == 1
+        assert len(mcp.registered_resources["object"]["uri_params"]) == 2
+        assert len(mcp.registered_resources["complex"]["uri_params"]) == 4
+        
+        # Verify specific parameter names
+        assert mcp.registered_resources["logs"]["uri_params"] == ["max_logs"]
+        assert mcp.registered_resources["scene"]["uri_params"] == ["scene_name"]
+        assert mcp.registered_resources["object"]["uri_params"] == ["id", "property_name"]
+        assert mcp.registered_resources["complex"]["uri_params"] == ["type", "id", "attribute", "format"]
+        
     @pytest.mark.asyncio
     async def test_resource_function_calls(self, mock_client, mock_context):
         """Test that resource functions can be called with the correct parameters"""
         mcp = MockFastMCP()
+
+        connection_manager = UnityConnectionManager(mock_client)
         
-        # Create a dynamic tool manager with mocked dependencies
-        with patch('server.dynamic_tools.FunctionResource', MockFunctionResource), \
-             patch('server.dynamic_tools.execute_unity_operation', 
-                   new=lambda op_name, op, ctx, error_prefix: asyncio.create_task(op())):
-            manager = DynamicToolManager(mcp, mock_client)
+        manager = DynamicToolManager(mcp, connection_manager)
+        
+        # Register resources from schema
+        result = await manager.register_from_schema()
+        assert result is True
+        
+        # Debug print the resources
+        print("\nDEBUG: Resources registered in test_resource_function_calls:")
+        for name, resource in mcp.registered_resources.items():
+            print(f"Resource {name}: {resource}")
+            # Ensure uri field is present
+            if "uri" not in resource:
+                print(f"WARNING: Resource {name} has no 'uri' field")
+                # If it has uriTemplate, convert it to uri
+                if "uriTemplate" in resource:
+                    resource["uri"] = resource.pop("uriTemplate")
+        
+        # Define the expected parameters directly
+        expected_params = {
+            "info": [],
+            "logs": ["max_logs"],
+            "scene": ["scene_name"],
+            "object": ["id", "property_name"],
+            "complex": ["type", "id", "attribute", "format"]
+        }
+        
+        # Make sure registered resources have the right params
+        for name, params in expected_params.items():
+            if name in mcp.registered_resources:
+                mcp.registered_resources[name]["uri_params"] = params
+        
+        # Test calling resource functions
+        
+        # No parameter function
+        info_func = mcp.registered_resources["info"]["func"]
+        with ResourceContext.with_context(mock_context):
+            result = await info_func(mock_context)
+            assert result["result"] == "success"
+        
+        # Single parameter function
+        logs_func = mcp.registered_resources["logs"]["func"]
+        with ResourceContext.with_context(mock_context):
+            result = await logs_func(mock_context, 5)
+            assert result["result"] == "success"
+        
+        # Check parameter was passed correctly
+        mock_client.send_command.assert_called_with("access_resource", {
+            "resource_name": "logs",
+            "parameters": {"max_logs": 5}
+        })
+        
+        # Multi-parameter function
+        object_func = mcp.registered_resources["object"]["func"]
+        with ResourceContext.with_context(mock_context):
+            result = await object_func(mock_context, "cube01", "position")
+            assert result["result"] == "success"
+        
+        # Check multiple parameters were passed correctly 
+        mock_client.send_command.assert_called_with("access_resource", {
+            "resource_name": "object",
+            "parameters": {"id": "cube01", "property_name": "position"}
+        })
+        
+        # Complex multi-parameter function
+        complex_func = mcp.registered_resources["complex"]["func"]
+        with ResourceContext.with_context(mock_context):
+            result = await complex_func(mock_context, "mesh", "player", "transform", "json")
+            assert result["result"] == "success"
             
-            # Register resources from schema
-            result = await manager.register_from_schema()
-            assert result is True
-            
-            # Debug print the resources
-            print("\nDEBUG: Resources registered in test_resource_function_calls:")
-            for name, resource in mcp.registered_resources.items():
-                print(f"Resource {name}: {resource}")
-                # Ensure uri field is present
-                if "uri" not in resource:
-                    print(f"WARNING: Resource {name} has no 'uri' field")
-                    # If it has uriTemplate, convert it to uri
-                    if "uriTemplate" in resource:
-                        resource["uri"] = resource.pop("uriTemplate")
-            
-            # Define the expected parameters directly
-            expected_params = {
-                "info": [],
-                "logs": ["max_logs"],
-                "scene": ["scene_name"],
-                "object": ["id", "property_name"],
-                "complex": ["type", "id", "attribute", "format"]
+        # Check all parameters were passed correctly
+        mock_client.send_command.assert_called_with("access_resource", {
+            "resource_name": "complex",
+            "parameters": {
+                "type": "mesh", 
+                "id": "player", 
+                "attribute": "transform", 
+                "format": "json"
             }
-            
-            # Make sure registered resources have the right params
-            for name, params in expected_params.items():
-                if name in mcp.registered_resources:
-                    mcp.registered_resources[name]["uri_params"] = params
-            
-            # Test calling resource functions
-            
-            # No parameter function
-            info_func = mcp.registered_resources["info"]["func"]
-            with ResourceContext.with_context(mock_context):
-                result = await info_func(mock_context)
-                assert result["result"] == "success"
-            
-            # Single parameter function
-            logs_func = mcp.registered_resources["logs"]["func"]
-            with ResourceContext.with_context(mock_context):
-                result = await logs_func(mock_context, 5)
-                assert result["result"] == "success"
-            
-            # Check parameter was passed correctly
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "logs",
-                "parameters": {"max_logs": 5}
-            })
-            
-            # Multi-parameter function
-            object_func = mcp.registered_resources["object"]["func"]
-            with ResourceContext.with_context(mock_context):
-                result = await object_func(mock_context, "cube01", "position")
-                assert result["result"] == "success"
-            
-            # Check multiple parameters were passed correctly 
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "object",
-                "parameters": {"id": "cube01", "property_name": "position"}
-            })
-            
-            # Complex multi-parameter function
-            complex_func = mcp.registered_resources["complex"]["func"]
-            with ResourceContext.with_context(mock_context):
-                result = await complex_func(mock_context, "mesh", "player", "transform", "json")
-                assert result["result"] == "success"
-                
-            # Check all parameters were passed correctly
-            mock_client.send_command.assert_called_with("access_resource", {
-                "resource_name": "complex",
-                "parameters": {
-                    "type": "mesh", 
-                    "id": "player", 
-                    "attribute": "transform", 
-                    "format": "json"
-                }
-            })
+        })
 
 # Run tests if executed directly
 if __name__ == "__main__":

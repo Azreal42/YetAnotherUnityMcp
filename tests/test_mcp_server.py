@@ -1,140 +1,179 @@
 """
-Tests for the Unity MCP server with the new modular structure
+Tests for the Unity MCP server with the dynamic tools structure.
+
+These tests verify the functionality of the MCP server components using
+dependency injection instead of singletons.
 """
 import pytest
+import asyncio
 import unittest.mock as mock
-import os
-import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 import json
-from fastapi.testclient import TestClient
-from fastmcp import FastMCP, Context, Image
-from server.mcp_server import app, mcp
-from server.mcp.tools.execute_code import execute_code_handler
-from server.mcp.tools.screen_shot import screen_shot_editor_handler
-from server.mcp.tools.modify_object import modify_object_handler
-from server.mcp.resources.unity_info import get_unity_info_handler
+import sys
 
-
-@pytest.fixture
-def client():
-    """Create a test client for the FastAPI app"""
-    return TestClient(app)
-
-
-@pytest.fixture
-def mock_mcp():
-    """Mock FastMCP for testing"""
-    with mock.patch("server.mcp_server.mcp") as mock_mcp:
-        yield mock_mcp
+from mcp.server.fastmcp import FastMCP, Context
+from server.mcp_server import mcp, register_dynamic_tools
+from server.unity_tcp_client import UnityTcpClient
+from server.connection_manager import UnityConnectionManager
+from server.dynamic_tools import DynamicToolManager
+from server.dynamic_tool_invoker import DynamicToolInvoker
 
 
 def test_mcp_instance():
-    """Test that MCP is properly initialized"""
-    # Check that the MCP instance is properly configured
-    assert mcp.name == "Unity MCP WebSocket"
-    assert "websockets" in mcp.dependencies
-    assert "pillow" in mcp.dependencies
-
-
-def test_mcp_tools_registered():
-    """Test that all expected tools are registered with MCP"""
-    # Get all registered tools from MCP
-    tools = mcp._tools  # This accesses internal state, might need adjustment
-    
-    # Check that our tools are registered
-    tool_names = [tool.name for tool in tools]
-    assert "execute_code_handler" in tool_names
-    assert "screen_shot_editor_handler" in tool_names
-    assert "modify_object_handler" in tool_names
-
-
-def test_mcp_resources_registered():
-    """Test that all expected resources are registered with MCP"""
-    # Get all registered resources from MCP
-    resources = mcp._resources  # This accesses internal state, might need adjustment
-    
-    # Get all resource URLs
-    resource_urls = [resource.url_pattern for resource in resources]
-    
-    # Check expected resources
-    assert "unity://info" in resource_urls
-    assert "unity://logs/{max_logs}" in resource_urls
-    assert "unity://scene/{scene_name}" in resource_urls
-    assert "unity://object/{object_id}" in resource_urls
-
-
-def test_execute_code_handler():
-    """Test the execute_code handler function with mocks"""
-    ctx = mock.MagicMock(spec=Context)
-    
-    # Mock AsyncExecutor.run_in_thread_or_loop to return a known value
-    with mock.patch("server.mcp.tools.execute_code.AsyncExecutor.run_in_thread_or_loop") as mock_run:
-        # Set up the mock to return a specific value
-        mock_run.return_value = "Code executed successfully"
-        
-        # Call the handler
-        result = execute_code_handler("print('test')", ctx)
-        
-        # Verify the result
-        assert result == "Code executed successfully"
-        mock_run.assert_called_once()
-
-
-def test_screen_shot_handler():
-    """Test the screen_shot_editor handler function with mocks"""
-    ctx = mock.MagicMock(spec=Context)
-    
-    # Mock AsyncExecutor.run_in_thread_or_loop to return a known value
-    with mock.patch("server.mcp.tools.screen_shot.AsyncExecutor.run_in_thread_or_loop") as mock_run:
-        # Create a dummy image result
-        dummy_image = Image(data=b"test_image_data", format="png")
-        mock_run.return_value = dummy_image
-        
-        # Call the handler
-        result = screen_shot_editor_handler("test.png", 800, 600, ctx)
-        
-        # Verify the result
-        assert result is dummy_image
-        assert result.format == "png"
-        mock_run.assert_called_once()
-
-
-def test_unity_info_handler():
-    """Test the get_unity_info handler function with mocks"""
-    # Mock AsyncExecutor.run_in_thread_or_loop to return a known value
-    with mock.patch("server.mcp.resources.unity_info.AsyncExecutor.run_in_thread_or_loop") as mock_run:
-        # Set up the mock to return a specific dictionary
-        mock_run.return_value = {
-            "unity_version": "2022.3.1f1",
-            "platform": "Windows",
-            "project_name": "TestProject"
-        }
-        
-        # Call the handler
-        result = get_unity_info_handler()
-        
-        # Verify the result
-        assert result["unity_version"] == "2022.3.1f1"
-        assert result["platform"] == "Windows"
-        assert result["project_name"] == "TestProject"
-        mock_run.assert_called_once()
+    """Test that the MCP instance is properly created and configured"""
+    # Verify MCP instance configuration
+    assert mcp.name == "Unity MCP WebSocket Client"
+    assert mcp.settings.lifespan is not None
 
 
 @pytest.mark.asyncio
-async def test_websocket_connection(client):
-    """Test WebSocket connection and basic message handling"""
-    # This is a bit more complex as we need to mock the WebSocket connection
-    # Note: The TestClient doesn't fully support WebSockets so we're mocking here
+async def test_dynamic_tools_registration():
+    """Test the registration of dynamic tools from schema"""
+    # Create a mock client
+    mock_client = AsyncMock(spec=UnityTcpClient)
+    mock_client.connected = True
+    mock_client.get_schema = AsyncMock(return_value={
+        "tools": [
+            {
+                "name": "execute_code",
+                "description": "Execute C# code in Unity"
+            }
+        ],
+        "resources": [
+            {
+                "name": "unity_info",
+                "description": "Get Unity information",
+                "uri": "unity://info"
+            }
+        ]
+    })
     
-    with mock.patch("server.websocket_handler.websocket_endpoint") as mock_endpoint:
-        # Set up the mock to perform basic functionality
-        mock_endpoint.return_value = None
-        
-        # Create a WebSocket connection (this will call our mocked endpoint)
-        with client.websocket_connect("/ws") as websocket:
-            # In a real test, we would send and receive messages here
-            # Since we've mocked the endpoint, we'll just verify it was called
-            mock_endpoint.assert_called_once()
-            
-            # The first argument should be the WebSocket object
-            assert mock_endpoint.call_args[0][0] is not None
+    # Create tool manager with our MCP instance and mock client
+    connection_manager = UnityConnectionManager(mock_client)
+    tool_manager = DynamicToolManager(mcp, connection_manager)
+    
+    # Register dynamic tools
+    await register_dynamic_tools(tool_manager)
+    
+    # Verify tools and resources were registered
+    assert "execute_code" in tool_manager.registered_tools
+    assert "unity_info" in tool_manager.registered_resources
+    
+    # Verify the schema was retrieved
+    mock_client.get_schema.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_dynamic_tool_invocation():
+    """Test invoking a dynamic tool through the DynamicToolInvoker"""
+    # Create mock client
+    mock_client = AsyncMock(spec=UnityTcpClient)
+    mock_client.connected = True
+    mock_client.send_command = AsyncMock(return_value={
+        "result": {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Code executed successfully"
+                }
+            ],
+            "isError": False
+        }
+    })
+    
+    # Create mock context
+    ctx = AsyncMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.error = AsyncMock()
+    
+    # Create connection manager and invoker
+    connection_manager = UnityConnectionManager(mock_client)
+    # Make execute_with_reconnect actually await the coroutine and return the result
+    async def execute_with_reconnect_side_effect(func):
+        return await func()
+    connection_manager.execute_with_reconnect = AsyncMock(side_effect=execute_with_reconnect_side_effect)
+    tool_invoker = DynamicToolInvoker(connection_manager)
+    
+    # Invoke a tool
+    code = "Debug.Log(\"Test\");"
+    result = await tool_invoker.invoke_dynamic_tool("execute_code", {"code": code}, ctx)
+    
+    # Verify the result
+    assert result is not None
+    assert "result" in result
+    assert "content" in result["result"]
+    assert not result["result"]["isError"]
+    assert "Code executed successfully" in result["result"]["content"][0]["text"]
+    
+    # Verify the client was called with the right parameters
+    mock_client.send_command.assert_called_once_with("execute_code", {"code": code})
+
+
+@pytest.mark.asyncio
+async def test_dynamic_resource_access():
+    """Test accessing a dynamic resource through the DynamicToolInvoker"""
+    # Create mock client
+    mock_client = AsyncMock(spec=UnityTcpClient)
+    mock_client.connected = True
+    mock_client.send_command = AsyncMock(return_value={
+        "result": {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "unity_version": "2022.3.1f1",
+                        "platform": "Windows",
+                        "project_name": "TestProject"
+                    })
+                }
+            ],
+            "isError": False
+        }
+    })
+    
+    # Create mock context
+    ctx = AsyncMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.error = AsyncMock()
+    
+    # Create connection manager and invoker
+    connection_manager = UnityConnectionManager(mock_client)
+    # Make execute_with_reconnect actually await the coroutine and return the result
+    async def execute_with_reconnect_side_effect(func):
+        return await func()
+    connection_manager.execute_with_reconnect = AsyncMock(side_effect=execute_with_reconnect_side_effect)
+    tool_invoker = DynamicToolInvoker(connection_manager)
+    
+    # Access a resource
+    result = await tool_invoker.invoke_dynamic_resource("unity_info", {}, ctx)
+    
+    # Verify the result
+    assert result is not None
+    assert "result" in result
+    assert "content" in result["result"]
+    assert not result["result"]["isError"]
+    
+    # Check the JSON structure
+    content_text = result["result"]["content"][0]["text"]
+    info_data = json.loads(content_text)
+    assert info_data["unity_version"] == "2022.3.1f1"
+    assert info_data["platform"] == "Windows"
+    assert info_data["project_name"] == "TestProject"
+    
+    # Verify the client was called with the right parameters
+    mock_client.send_command.assert_called_once_with("access_resource", {
+        "resource_name": "unity_info",
+        "parameters": {}
+    })
+
+
+# Helper to configure asyncio for Windows
+def pytest_configure(config):
+    """Configure pytest for async tests"""
+    # Set Windows event loop policy if needed
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+if __name__ == "__main__":
+    # Run the tests
+    pytest.main(["-xvs", __file__])

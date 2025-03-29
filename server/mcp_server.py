@@ -33,15 +33,15 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     """
     logger.info("Server starting: initializing Unity TCP client...")
     
-    try:
-        from server.dynamic_tools import DynamicToolManager
-        from server.connection_manager import UnityConnectionManager
-        from server.unity_tcp_client import UnityTcpClient
+    from server.dynamic_tools import DynamicToolManager
+    from server.connection_manager import UnityConnectionManager
+    from server.unity_tcp_client import UnityTcpClient
 
-        # Get the connection manager
-        client = UnityTcpClient("tcp://localhost:8080/")
-        connection_manager = UnityConnectionManager(client)
-        
+    # Get the connection manager
+    client = UnityTcpClient("tcp://localhost:8080/")
+    connection_manager = UnityConnectionManager(client)
+
+    try:
         # Register connected event handler for dynamic tool registration through the connection manager
         async def connected_callback():
             logger.info("Connection established, registering dynamic tools...")
@@ -50,6 +50,7 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
             # Pass the client explicitly (required)
             dynamic_manager = DynamicToolManager(mcp, unity_client)
             await register_dynamic_tools(dynamic_manager)
+            
         connection_manager.add_connection_listener(connected_callback)
 
         # Connect to Unity TCP server
@@ -64,7 +65,6 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     finally:
         # Clean up when the server stops
         logger.info("Server stopping: disconnecting Unity TCP client...")
-        connection_manager = get_unity_connection_manager()
         await connection_manager.disconnect()
         logger.info("Unity TCP client disconnected")
 

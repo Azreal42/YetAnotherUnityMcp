@@ -8,8 +8,9 @@ from typing import Dict, Any
 import sys
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from server.connection_manager import UnityConnectionManager
 from server.dynamic_tools import DynamicToolManager
-from server.dynamic_tool_invoker import invoke_dynamic_tool, invoke_dynamic_resource
+from server.dynamic_tool_invoker import DynamicToolInvoker
 from mcp.server.fastmcp import FastMCP
 
 # Configure logging
@@ -403,8 +404,10 @@ class TestDynamicTools:
         logger.info("Using connected client...")
         client = connected_client
         
+        connection_manager = UnityConnectionManager(client)
+
         # Create dynamic tool manager with the client directly
-        manager = DynamicToolManager(mcp_test_instance, client)
+        manager = DynamicToolManager(mcp_test_instance, connection_manager)
         
         # Register tools from schema with timeout
         logger.info("Registering tools from schema...")
@@ -434,7 +437,7 @@ class TestDynamicTools:
             
         logger.info(f"Using parameter name: {param_name}")
         code = "Debug.Log(\\\"Hello from dynamic tool\\\"); return 42;"
-        result = await invoke_dynamic_tool(execute_code_tool, {param_name: code})
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_tool(execute_code_tool, {param_name: code})
         
         assert result is not None, "Tool invocation returned None"
         logger.info(f"Tool result: {json.dumps(result, indent=2)}")
@@ -448,8 +451,10 @@ class TestDynamicTools:
         logger.info("Using connected client...")
         client = connected_client
         
+        connection_manager = UnityConnectionManager(client)
+        
         # Create dynamic tool manager with the client directly
-        manager = DynamicToolManager(mcp_test_instance, client)
+        manager = DynamicToolManager(mcp_test_instance, connection_manager)
         
         # Register tools from schema with timeout
         logger.info("Registering tools from schema...")
@@ -472,7 +477,7 @@ class TestDynamicTools:
         info_resource = info_resource_names[0]
         logger.info(f"TESTING RESOURCE: {info_resource} (no parameters)")
         
-        result = await invoke_dynamic_resource(info_resource)
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource(info_resource)
         
         assert result is not None, "Resource invocation returned None"
         logger.info(f"Resource result: {json.dumps(result, indent=2)}")
@@ -508,7 +513,7 @@ class TestDynamicTools:
             
         logger.info(f"TESTING RESOURCE: {found_resource} with parameters: {param_dict}")
         
-        result = await invoke_dynamic_resource(found_resource, param_dict)
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource(found_resource, param_dict)
         
         assert result is not None, "Resource invocation returned None"
         logger.info(f"Resource result with params: {json.dumps(result, indent=2)}")
@@ -521,9 +526,9 @@ class TestDynamicTools:
         # Use connected client directly
         logger.info("Using connected client...")
         client = connected_client
-        
+        connection_manager = UnityConnectionManager(client)
         # Create dynamic tool manager with the client directly
-        manager = DynamicToolManager(mcp_test_instance, client)
+        manager = DynamicToolManager(mcp_test_instance, connection_manager)
         
         # Register tools from schema with timeout
         logger.info("Registering tools from schema...")
@@ -568,7 +573,7 @@ class TestDynamicTools:
             # Call with our test parameters (this will likely fail as expected)
             logger.info(f"Invoking simulated multi-param resource with parameters: {json.dumps(test_params)}")
             with pytest.raises(Exception):
-                await invoke_dynamic_resource("test_multi_param", test_params)
+                await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("test_multi_param", test_params)
         else:
             # Test found multi-parameter resources
             for name, param_names in multi_param_resources.items():
@@ -586,7 +591,7 @@ class TestDynamicTools:
                 logger.info(f"Invoking multi-param resource {name} with snake_case parameters: {json.dumps(params)}")
                 
                 # Parameters will be automatically converted to camelCase by invoke_dynamic_resource
-                result = await invoke_dynamic_resource(name, params)
+                result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource(name, params)
                 
                 assert result is not None, "Resource invocation returned None"
                 logger.info(f"Multi-param resource result: {json.dumps(result, indent=2)}")
@@ -621,7 +626,7 @@ class TestDynamicTools:
                     # This should raise an exception since the parameter is required
                     try:
                         with pytest.raises(Exception):
-                            await invoke_dynamic_resource(name, missing_params)
+                            await DynamicToolInvoker(connection_manager).invoke_dynamic_resource(name, missing_params)
                         logger.info("Successfully caught exception for missing required parameter")
                     except pytest.fail.Exception:
                         # If it doesn't raise an exception, log that this parameter might not be required
@@ -638,16 +643,17 @@ class TestDynamicTools:
                             
                             # Try with a different parameter
                             with pytest.raises(Exception):
-                                await invoke_dynamic_resource(name, missing_params)
+                                await DynamicToolInvoker(connection_manager).invoke_dynamic_resource(name, missing_params)
     
     async def test_error_handling(self, connected_client, mcp_test_instance):
         """Test error handling for non-existent tools and resources"""
         # Use connected client directly
         logger.info("Using connected client...")
         client = connected_client
+        connection_manager = UnityConnectionManager(client)
         
         # Create dynamic tool manager with the client directly
-        manager = DynamicToolManager(mcp_test_instance, client)
+        manager = DynamicToolManager(mcp_test_instance, connection_manager)
         
         # Register tools from schema with timeout
         logger.info("Registering tools from schema...")
@@ -655,7 +661,7 @@ class TestDynamicTools:
         
         # Try invoking an unknown tool
         logger.info("TESTING: non-existent tool")
-        result = await invoke_dynamic_tool("non_existent_tool", {})
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_tool("non_existent_tool", {})
         
         # Should return error result but not crash
         assert result is not None, "Error handling returned None"
@@ -663,7 +669,7 @@ class TestDynamicTools:
         
         # Try invoking an unknown resource
         logger.info("TESTING: non-existent resource")
-        result = await invoke_dynamic_resource("non_existent_resource", {})
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("non_existent_resource", {})
         
         # Should return error result but not crash
         assert result is not None, "Error handling returned None"
@@ -988,93 +994,90 @@ class TestDynamicToolsMocked:
     @pytest.mark.asyncio
     async def test_mock_tool_invocation(self, mock_unity_client, mcp_test_instance):
         """Test invoking dynamic tools with mocked client"""
-        # Create dynamic tool manager
-        with patch('server.dynamic_tool_invoker.get_client', return_value=mock_unity_client),\
-             patch('server.dynamic_tool_invoker.get_unity_connection_manager') as mock_connection_manager:
-            
-            # Mock the connection manager
-            manager_mock = AsyncMock()
-            manager_mock.reconnect = AsyncMock(return_value=True)
-            manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
-            mock_connection_manager.return_value = manager_mock
-            
-            # Register tools with direct client injection
-            tool_manager = DynamicToolManager(mcp_test_instance, mock_unity_client)
-            await tool_manager.register_from_schema()
-            
-            # Test invoking tools based on what's available in schema
-            # Try scene_load_scene first, then fall back to editor_execute_code
-            try:
-                result = await invoke_dynamic_tool("scene_load_scene", {"scene_name": "TestScene"})
-                logger.info("Successfully invoked scene_load_scene tool")
-            except Exception as e:
-                logger.warning(f"Failed to invoke scene_load_scene: {str(e)}")
-                # Fall back to editor_execute_code
-                code = "Debug.Log(\\\"Hello\\\"); return 42;"
-                result = await invoke_dynamic_tool("editor_execute_code", {"param1": code})
-                logger.info("Successfully invoked editor_execute_code tool")
-            
-            assert result is not None, "Tool invocation returned None"
-            # Extract text content if it's in new MCP format
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "Result: 42" in text_content, "Execute code did not return expected result"
+    
+        connection_manager = UnityConnectionManager(mock_unity_client)
+        
+        # Mock the connection manager
+        manager_mock = AsyncMock()
+        manager_mock.reconnect = AsyncMock(return_value=True)
+        manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
+        
+        
+        # Register tools with direct client injection
+        tool_manager = DynamicToolManager(mcp_test_instance, connection_manager)
+        await tool_manager.register_from_schema()
+        
+        # Test invoking tools based on what's available in schema
+        # Try scene_load_scene first, then fall back to editor_execute_code
+        try:
+            result = await DynamicToolInvoker(connection_manager).invoke_dynamic_tool("scene_load_scene", {"scene_name": "TestScene"})
+            logger.info("Successfully invoked scene_load_scene tool")
+        except Exception as e:
+            logger.warning(f"Failed to invoke scene_load_scene: {str(e)}")
+            # Fall back to editor_execute_code
+            code = "Debug.Log(\\\"Hello\\\"); return 42;"
+            result = await DynamicToolInvoker(connection_manager).invoke_dynamic_tool("editor_execute_code", {"param1": code})
+            logger.info("Successfully invoked editor_execute_code tool")
+        
+        assert result is not None, "Tool invocation returned None"
+        # Extract text content if it's in new MCP format
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "Result: 42" in text_content, "Execute code did not return expected result"
     
     @pytest.mark.asyncio
     async def test_mock_resource_invocation(self, mock_unity_client, mcp_test_instance):
         """Test invoking dynamic resources with mocked client"""
-        # Create dynamic tool manager
-        with patch('server.dynamic_tool_invoker.get_client', return_value=mock_unity_client),\
-             patch('server.dynamic_tool_invoker.get_unity_connection_manager') as mock_connection_manager:
-            
-            # Mock the connection manager
-            manager_mock = AsyncMock()
-            manager_mock.reconnect = AsyncMock(return_value=True)
-            manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
-            mock_connection_manager.return_value = manager_mock
-            
-            # Register tools with direct client injection
-            tool_manager = DynamicToolManager(mcp_test_instance, mock_unity_client)
-            await tool_manager.register_from_schema()
-            
-            # Test invoking unity_info resource
-            result = await invoke_dynamic_resource("unity_info")
-            
-            assert result is not None, "Resource invocation returned None"
-            # Extract and validate result
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "unityVersion" in text_content, "unity_info resource did not return expected content"
-            
-            # Test invoking logs resource with parameter
-            result = await invoke_dynamic_resource("logs", {"max_logs": 3})
-            
-            assert result is not None, "Resource invocation returned None"
-            # Extract and validate result
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "Log message" in text_content, "logs resource did not return expected content"
-            
-            # Test multi-parameter resource - use snake_case for parameters
-            result = await invoke_dynamic_resource("object_properties", {
-                "object_id": "test_cube", 
-                "property_name": "position"
-            })
-            
-            assert result is not None, "Resource invocation returned None"
-            # Extract and validate result
-            if isinstance(result, dict) and isinstance(result.get("result"), dict):
-                content = result.get("result", {}).get("content", [])
-                if content and isinstance(content, list) and content[0].get("type") == "text":
-                    text_content = content[0].get("text", "")
-                    assert "test_cube" in text_content, "object_properties resource did not return expected objectId"
-                    assert "position" in text_content, "object_properties resource did not return expected propertyName"
+    
+        connection_manager = UnityConnectionManager(mock_unity_client)
+        # Mock the connection manager
+        manager_mock = AsyncMock()
+        manager_mock.reconnect = AsyncMock(return_value=True)
+        manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
+        
+        
+        # Register tools with direct client injection
+        tool_manager = DynamicToolManager(mcp_test_instance, connection_manager)
+        await tool_manager.register_from_schema()
+        
+        # Test invoking unity_info resource
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("unity_info")
+        
+        assert result is not None, "Resource invocation returned None"
+        # Extract and validate result
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "unityVersion" in text_content, "unity_info resource did not return expected content"
+        
+        # Test invoking logs resource with parameter
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("logs", {"max_logs": 3})
+        
+        assert result is not None, "Resource invocation returned None"
+        # Extract and validate result
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "Log message" in text_content, "logs resource did not return expected content"
+        
+        # Test multi-parameter resource - use snake_case for parameters
+        result = await DynamicToolInvoker(connection_manager).invoke_dynamic_resource("object_properties", {
+            "object_id": "test_cube", 
+            "property_name": "position"
+        })
+        
+        assert result is not None, "Resource invocation returned None"
+        # Extract and validate result
+        if isinstance(result, dict) and isinstance(result.get("result"), dict):
+            content = result.get("result", {}).get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                text_content = content[0].get("text", "")
+                assert "test_cube" in text_content, "object_properties resource did not return expected objectId"
+                assert "position" in text_content, "object_properties resource did not return expected propertyName"
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
