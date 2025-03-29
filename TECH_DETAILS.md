@@ -165,7 +165,7 @@ By default, the system defines a set of commands that the Unity server will reco
 - `execute_code`: Execute an arbitrary C# code snippet in the Unity environment.
 - `take_screenshot`: Capture a screenshot of the current Unity Editor view.
 - `modify_object`: Modify properties of a Unity GameObject.
-- `get_logs`: Get recent Unity console logs.
+- `get_logs`: Get recent Unity console logs (supports `only_new_logs` parameter to retrieve only new logs).
 - `get_unity_info`: Get information about the Unity environment.
 - `get_schema`: Retrieve information about all available tools and resources.
 - `access_resource`: Generic command to access any registered resource by name.
@@ -242,6 +242,10 @@ The system is designed to handle errors gracefully and maintain security:
 4. **Timeout Handling**: Command execution has timeouts to prevent hanging operations.
 
 5. **Connection Monitoring**: Performance metrics are tracked and logged for monitoring connection health.
+
+6. **Log Monitoring**: Unity logs are captured in real-time using `Application.logMessageReceived` and stored efficiently with a maximum cache size.
+
+7. **Incremental Log Retrieval**: The log system supports retrieving only new logs that haven't been sent before, reducing bandwidth and processing overhead.
 
 ## Thread-Local Context Management
 
@@ -459,14 +463,17 @@ The Python MCP client can dynamically register tools and resources based on the 
 3. **Tool Registration**: For each tool in the schema, a dynamic function is created and registered with FastMCP.
    - Tools are registered with their proper input parameters and descriptions
    - The system creates properly-typed tool handlers that respect the MCP interface
+   - Schema-based metadata is generated for each tool to enable input validation
 
 4. **Resource Registration**: For each resource in the schema, it's stored in the manager's registry.
    - Resource URIs and parameters are extracted and stored
    - This allows tools to reference and use resources by name
 
-5. **Parameter Mapping**: The dynamic functions automatically map parameters from the schema to the function signature.
-   - Tool parameters are mapped from the schema definition to the actual function call
-   - Type conversions are handled automatically
+5. **Parameter Validation**: A schema-based validation system processes input parameters:
+   - The `func_metadata` method creates Pydantic models from input schemas
+   - JSON schema types are mapped to Python types for validation
+   - Required parameters are enforced with appropriate validation rules
+   - Default values are handled for optional parameters
 
 6. **Command Execution**: When a dynamic tool is invoked, the parameters are mapped to the command and sent to Unity.
    - The unified access_resource command is used for all resource access
@@ -477,9 +484,10 @@ This system provides several benefits:
 - **Automatic API Adaptation**: The Python client automatically adapts to changes in the Unity API.
 - **No Code Generation**: No code generation or manual updates are required when new tools are added to Unity.
 - **Self-Documenting**: The schema provides complete documentation of available tools and their parameters.
-- **Type Safety**: Parameter types from the schema are used to validate inputs.
+- **Type Safety**: Parameter types from the schema are used to validate inputs with proper Python type conversion.
 - **Robust Schema Parsing**: The system can handle various schema formats and extract tools/resources correctly.
 - **Error Resilience**: The registration process can continue even if some tools or resources fail to register.
+- **Schema-Based Validation**: Input parameters are validated against the schema using Pydantic models before execution.
 
 
 # All tools from Unity are now available in the MCP instance

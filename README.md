@@ -39,7 +39,7 @@ YetAnotherUnityMcp implements the official MCP specification with full complianc
 - Query Unity Editor state through MCP resources with dynamic parameter handling
 - Organize MCP resources and tools in logical containers for better organization
 - Capture screenshots with AI-driven parameters
-- Get logs and debug information from Unity
+- Get logs and debug information from Unity with real-time monitoring and incremental retrieval
 - Modify GameObject properties with AI assistance
 - List and navigate GameObject hierarchies
 - Provide contextual templates through MCP prompts
@@ -47,6 +47,7 @@ YetAnotherUnityMcp implements the official MCP specification with full complianc
 - TCP server hosted directly in Unity
 - Fast, efficient JSON serialization
 - Dynamic resource invocation with type-safe parameter mapping
+- Schema-based input validation for tools and resources
 
 ## Getting Started
 
@@ -166,7 +167,7 @@ The Python client connects to the Unity TCP server and provides an MCP interface
 - `execute_code_in_unity` - Run C# code in the Unity Editor
 - `unity_screenshot` - Take screenshots of the Unity Editor
 - `unity_modify_object` - Change properties of Unity GameObjects
-- `unity_logs` - Get logs from Unity
+- `unity_logs` - Get logs from Unity with option to retrieve only new logs
 
 ## Communication Protocol
 
