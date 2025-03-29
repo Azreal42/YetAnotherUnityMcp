@@ -145,6 +145,79 @@ namespace YetAnotherUnityMcp.Editor.Containers
             public DateTime Timestamp { get; set; }
         }
         
+        // Store logs in memory
+        private static System.Collections.Generic.List<LogEntry> _cachedLogs = new System.Collections.Generic.List<LogEntry>();
+        
+        // Static constructor to register for logs as soon as the class is loaded
+        static YaumSpecificMcpContainer()
+        {
+            InitializeLogMonitoring();
+        }
+        
+        /// <summary>
+        /// Initialize log monitoring system
+        /// </summary>
+        public static void InitializeLogMonitoring()
+        {
+            // Only register once
+            if (_cachedLogs.Count == 0)
+            {
+                Debug.Log("[MCP Server] Initializing log monitoring system");
+                
+                // Register for log messages
+                Application.logMessageReceived += OnLogMessageReceived;
+                
+                // Add initial log
+                _cachedLogs.Add(new LogEntry
+                {
+                    Type = "Info",
+                    Message = "Log monitoring started",
+                    StackTrace = "",
+                    Timestamp = DateTime.Now
+                });
+            }
+        }
+        
+        /// <summary>
+        /// Log callback handler for Application.logMessageReceived
+        /// </summary>
+        private static void OnLogMessageReceived(string logString, string stackTrace, LogType type)
+        {
+            string logType;
+            switch (type)
+            {
+                case LogType.Log:
+                    logType = "Log";
+                    break;
+                case LogType.Warning:
+                    logType = "Warning";
+                    break;
+                case LogType.Error:
+                case LogType.Exception:
+                case LogType.Assert:
+                    logType = "Error";
+                    break;
+                default:
+                    logType = "Unknown";
+                    break;
+            }
+            
+            _cachedLogs.Add(new LogEntry
+            {
+                Type = logType,
+                Message = logString,
+                StackTrace = stackTrace,
+                Timestamp = DateTime.Now
+            });
+            
+            // Limit cache size to prevent memory issues
+            const int maxCacheSize = 1000;
+            if (_cachedLogs.Count > maxCacheSize)
+            {
+                _cachedLogs.RemoveAt(0);
+            }
+        }
+        
         /// <summary>
         /// Get console logs from Unity Editor
         /// </summary>
@@ -152,194 +225,24 @@ namespace YetAnotherUnityMcp.Editor.Containers
         /// <returns>List of log entries</returns>
         private static System.Collections.Generic.List<LogEntry> GetConsoleLogs(int maxLogs)
         {
+            
+            // Create a copy of the logs to return
             var logs = new System.Collections.Generic.List<LogEntry>();
             
-            // Use reflection to access the internal Unity console log entries
-            // since Unity doesn't expose this information via public API
-            try
+            // Get the most recent logs, up to maxLogs
+            int count = Math.Min(maxLogs, _cachedLogs.Count);
+            for (int i = _cachedLogs.Count - count; i < _cachedLogs.Count; i++)
             {
-                // Get the console window type
-                var consoleWindowType = Type.GetType("UnityEditor.ConsoleWindow,UnityEditor");
-                if (consoleWindowType == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not find ConsoleWindow type",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                // Get the console window instance
-                var fieldInfo = consoleWindowType.GetField("ms_ConsoleWindow", BindingFlags.Static | BindingFlags.NonPublic);
-                if (fieldInfo == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not find ms_ConsoleWindow field",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                var consoleWindow = fieldInfo.GetValue(null);
-                if (consoleWindow == null)
-                {
-                    // Try to get by opening the console window if it's not open
-                    consoleWindow = EditorWindow.GetWindow(consoleWindowType);
-                    if (consoleWindow == null)
-                    {
-                        logs.Add(new LogEntry
-                        {
-                            Type = "Error",
-                            Message = "Could not get ConsoleWindow instance",
-                            StackTrace = "",
-                            Timestamp = DateTime.Now
-                        });
-                        return logs;
-                    }
-                }
-                
-                // Get the log entries
-                var logEntriesField = consoleWindowType.GetField("m_LogEntries", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (logEntriesField == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not find m_LogEntries field",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                var logEntries = logEntriesField.GetValue(consoleWindow);
-                if (logEntries == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not get log entries",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                // Get count property
-                var logEntriesType = logEntries.GetType();
-                var countProperty = logEntriesType.GetProperty("Count");
-                if (countProperty == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not find Count property",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                int count = Math.Min(maxLogs, (int)countProperty.GetValue(logEntries, null));
-                
-                // Get StartGettingEntries and EndGettingEntries methods
-                var startMethod = logEntriesType.GetMethod("StartGettingEntries");
-                var endMethod = logEntriesType.GetMethod("EndGettingEntries");
-                var getEntryMethod = logEntriesType.GetMethod("GetEntryInternal", BindingFlags.Instance | BindingFlags.Public);
-                
-                if (startMethod == null || endMethod == null || getEntryMethod == null)
-                {
-                    logs.Add(new LogEntry
-                    {
-                        Type = "Error",
-                        Message = "Could not find log entry methods",
-                        StackTrace = "",
-                        Timestamp = DateTime.Now
-                    });
-                    return logs;
-                }
-                
-                // Start getting entries
-                startMethod.Invoke(logEntries, null);
-                
-                // Log entry parameters
-                object[] index = new object[1];
-                int mode = 1; // Mode 1 is default for getting entries
-                
-                // Get entries
-                for (int i = 0; i < count; i++)
-                {
-                    index[0] = i;
-                    object entry = getEntryMethod.Invoke(logEntries, new object[] { i, mode });
-                    
-                    if (entry != null)
-                    {
-                        Type entryType = entry.GetType();
-                        FieldInfo messageField = entryType.GetField("message");
-                        FieldInfo stackTraceField = entryType.GetField("stackTrace");
-                        FieldInfo typeField = entryType.GetField("type");
-                        
-                        if (messageField != null && stackTraceField != null && typeField != null)
-                        {
-                            string message = messageField.GetValue(entry) as string ?? "No message";
-                            string stackTrace = stackTraceField.GetValue(entry) as string ?? "";
-                            int type = (int)typeField.GetValue(entry);
-                            
-                            string logType;
-                            switch (type)
-                            {
-                                case 0:
-                                    logType = "Log";
-                                    break;
-                                case 1:
-                                    logType = "Warning";
-                                    break;
-                                case 2:
-                                    logType = "Error";
-                                    break;
-                                default:
-                                    logType = "Unknown";
-                                    break;
-                            }
-                            
-                            logs.Add(new LogEntry
-                            {
-                                Type = logType,
-                                Message = message,
-                                StackTrace = stackTrace,
-                                Timestamp = DateTime.Now.AddSeconds(-i) // Approximate timestamp
-                            });
-                        }
-                    }
-                }
-                
-                // End getting entries
-                endMethod.Invoke(logEntries, null);
-            }
-            catch (Exception ex)
-            {
-                logs.Add(new LogEntry
-                {
-                    Type = "Error",
-                    Message = $"Error accessing console logs: {ex.Message}",
-                    StackTrace = ex.StackTrace,
-                    Timestamp = DateTime.Now
-                });
+                logs.Add(_cachedLogs[i]);
             }
             
-            // If reflection approach failed, just add a placeholder
+            // If no logs are available, add a placeholder
             if (logs.Count == 0)
             {
                 logs.Add(new LogEntry
                 {
                     Type = "Info",
-                    Message = "No logs found or unable to access console logs",
+                    Message = "No logs found",
                     StackTrace = "",
                     Timestamp = DateTime.Now
                 });

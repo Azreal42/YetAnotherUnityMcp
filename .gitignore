@@ -51,3 +51,4 @@ repomix-output.xml
 *_schema_debug.json
 *_schema_debug_*.json
 schema_debug.json
+schema_output.json

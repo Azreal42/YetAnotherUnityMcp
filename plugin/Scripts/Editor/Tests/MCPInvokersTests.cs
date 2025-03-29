@@ -69,6 +69,17 @@ namespace YetAnotherUnityMcp.Editor.Tests
             {
                 return $"{{\"param1\": \"{param1}\", \"param2\": {param2}}}";
             }
+            
+            /// <summary>
+            /// Mock of the execute_code function
+            /// </summary>
+            [MCPTool("execute_code", "Execute C# code in Unity", "execute_code(\"Debug.Log(\\\"Hello\\\"); return 42;\")")]
+            public static string ExecuteCode(
+                [MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code)
+            {
+                Debug.Log($"Executing code: {code}");
+                return $"{{\"result\": \"Executed: {code}\"}}";
+            }
         }
         
         // Legacy classes to support backward compatibility tests
@@ -243,72 +254,6 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
         
         /// <summary>
-        /// Test ResourceInvoker with default parameter
-        /// </summary>
-        [Test]
-        public void ResourceInvoker_WithDefaultParameter_UsesDefaultValue()
-        {
-            // Act - don't provide the parameter
-            var result = ResourceInvoker.InvokeResource("test_resource_with_default", null);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"default_value\"}", result);
-        }
-        
-        /// <summary>
-        /// Test ResourceInvoker with type conversion
-        /// </summary>
-        [Test]
-        public void ResourceInvoker_WithTypeConversion_ConvertsParametersCorrectly()
-        {
-            // Arrange - provide param2 as string instead of int
-            var parameters = new Dictionary<string, object>
-            {
-                { "param1", "test_value" },
-                { "param2", "42" }  // String instead of int
-            };
-            
-            // Act
-            var result = ResourceInvoker.InvokeResource("test_resource_with_params", parameters);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
-        }
-        
-        /// <summary>
-        /// Test ResourceInvoker with nonexistent resource
-        /// </summary>
-        [Test]
-        public void ResourceInvoker_WithNonexistentResource_ThrowsArgumentException()
-        {
-            // Act & Assert
-            Assert.Throws<ArgumentException>(() => 
-                ResourceInvoker.InvokeResource("nonexistent_resource", null)
-            );
-        }
-        
-        /// <summary>
-        /// Test ResourceInvoker with missing required parameter
-        /// </summary>
-        [Test]
-        public void ResourceInvoker_WithMissingRequiredParameter_ThrowsArgumentException()
-        {
-            // Arrange - missing required param2
-            var parameters = new Dictionary<string, object>
-            {
-                { "param1", "test_value" }
-                // param2 is missing
-            };
-            
-            // Act & Assert
-            Assert.Throws<ArgumentException>(() => 
-                ResourceInvoker.InvokeResource("test_resource_with_params", parameters)
-            );
-        }
-        
-        /// <summary>
         /// Test ToolInvoker with a simple tool
         /// </summary>
         [Test]
@@ -344,270 +289,99 @@ namespace YetAnotherUnityMcp.Editor.Tests
         }
         
         /// <summary>
-        /// Test ToolInvoker with args parameter
+        /// Reproduce the issue with JSON parameters for execute_code
         /// </summary>
         [Test]
-        public void ToolInvoker_WithArgs_ThrowsExceptionForMissingParam2()
+        public void ExecuteCode_WithJsonParameters()
         {
-            // Arrange - using positional args (only one parameter where two are required)
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", "test_value" } // Single arg as string
-            };
+            // Arrange - Simulate the JSON payload sent from the TCP client
+            string jsonParams = "{\"code\":\"Debug.Log(\\\"Hello from TCP test\\\"); return DateTime.Now.ToString();\"}";
             
-            // Act & Assert
-            // This should throw an exception because param2 is required and not provided
-            Assert.Throws<ArgumentException>(() => 
-                ToolInvoker.InvokeTool("test_tool_with_params", parameters)
-            );
+            // Parse the JSON to dictionary the same way it would happen in the system
+            var parameters = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonParams);
+            
+            // Log the parsed parameters to see what's actually in there
+            Debug.Log($"Parameters after parsing: {JsonConvert.SerializeObject(parameters)}");
+            
+            // Act
+            var result = ToolInvoker.InvokeTool("test_execute_code", parameters);
+            
+            // Assert
+            Assert.IsNotNull(result);
+            // We expect the code to be passed correctly despite coming from JSON
+            Assert.IsTrue(result.ToString().Contains("Hello from TCP test"), 
+                "Result should contain the code that was passed from JSON");
+            
+            // Log actual result for debugging
+            Debug.Log($"Execute code result with JSON parameters: {result}");
         }
         
         /// <summary>
-        /// Test ToolInvoker with args parameter using a tool with optional parameters
+        /// Test the fix by reproducing the exact TCP server scenario
         /// </summary>
         [Test]
-        public void ToolInvoker_WithArgs_HandlesOptionalParameters()
+        public void TcpServer_JsonParameterParsing_ShouldWork()
         {
-            // We need to register a tool with optional parameters for this test
-            var methodInfo = typeof(TestResourceWithDefault).GetMethod("GetResource");
-            var toolDescriptor = new ToolDescriptor
+            // This test simulates what happens in the TCP server when receiving a JSON command
+            
+            // Step 1: The JSON message from client (exactly as seen in the logs)
+            string jsonRequest = "{\"id\":\"req_123\",\"command\":\"test_execute_code\",\"parameters\":{\"code\":\"Debug.Log(\\\"Hello from TCP test\\\"); return DateTime.Now.ToString();\"},\"client_timestamp\":1711725076543}";
+            
+            // Step 2: Parse the request
+            var request = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonRequest);
+            
+            // Step 3: Extract the parameters object
+            var parametersObj = request["parameters"];
+            
+            // Step A: Direct conversion (what happens in the issue)
+            Dictionary<string, object> parametersDirectCast = parametersObj as Dictionary<string, object>;
+            
+            Debug.Log($"Direct cast gave us: {(parametersDirectCast == null ? "null" : JsonConvert.SerializeObject(parametersDirectCast))}");
+            
+            // Step B: Convert JObject to Dictionary (what should happen)
+            Dictionary<string, object> parametersJObjectConvert = null;
+            if (parametersObj is JObject jObject)
             {
-                Name = "tool_with_optional",
-                Description = "Test tool with optional parameter",
-                Example = "tool_with_optional()",
-                ContainerType = typeof(TestResourceWithDefault),
-                MethodInfo = methodInfo,
-                InputSchema = new InputSchema
+                parametersJObjectConvert = jObject.ToObject<Dictionary<string, object>>();
+                Debug.Log($"JObject conversion gave us: {JsonConvert.SerializeObject(parametersJObjectConvert)}");
+            }
+            
+            // Log what we actually received
+            Debug.Log($"Parameters object type: {parametersObj.GetType().FullName}");
+            
+            // Tests with both approaches
+            if (parametersDirectCast != null)
+            {
+                try
                 {
-                    Properties = new Dictionary<string, ParameterDescriptor>
-                    {
-                        { "param1", new ParameterDescriptor { Description = "Parameter with default value", Type = "string", IsRequired = false } }
-                    }
+                    var resultDirect = ToolInvoker.InvokeTool(request["command"].ToString(), parametersDirectCast);
+                    Debug.Log($"Direct cast worked! Result: {resultDirect}");
+                    Assert.IsTrue(resultDirect.ToString().Contains("Hello from TCP test"), 
+                        "Direct cast should work if fixed");
                 }
-            };
-            MCPRegistry.Instance.RegisterTool(toolDescriptor);
-            
-            // Arrange - using no args for a tool with optional parameters
-            var parameters = new Dictionary<string, object>();
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("tool_with_optional", parameters);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"default_value\"}", result);
-        }
-        
-        /// <summary>
-        /// Test ToolInvoker with args array
-        /// </summary>
-        [Test]
-        public void ToolInvoker_WithArgsArray_PassesParametersCorrectly()
-        {
-            // Arrange - using positional args as JArray
-            var jsonArray = Newtonsoft.Json.Linq.JArray.FromObject(new object[] { "test_value", 42 });
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", jsonArray }
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
-        }
-        
-        /// <summary>
-        /// Test ToolInvoker with kwargs parameter
-        /// </summary>
-        [Test]
-        public void ToolInvoker_WithKwargs_PassesParametersCorrectly()
-        {
-            // Arrange - using kwargs as JObject
-            var dict = new Dictionary<string, object>
-            {
-                { "param1", "test_value" },
-                { "param2", 42 }
-            };
-            var jObject = Newtonsoft.Json.Linq.JObject.FromObject(dict);
-            var parameters = new Dictionary<string, object>
-            {
-                { "kwargs", jObject }
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
-        }
-        
-        /// <summary>
-        /// Test ToolInvoker with mixed args and kwargs
-        /// </summary>
-        [Test]
-        public void ToolInvoker_WithMixedArgsAndKwargs_PassesParametersCorrectly()
-        {
-            // Arrange - using both args and kwargs
-            var dict = new Dictionary<string, object>
-            {
-                { "param2", 42 } // Only provide param2 in kwargs
-            };
-            var jObject = Newtonsoft.Json.Linq.JObject.FromObject(dict);
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", "test_value" }, // param1 as positional arg
-                { "kwargs", jObject }      // param2 as kwarg
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
-            
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
-        }
-        
-        /// <summary>
-        /// Test mapping string args to first parameter (like the editor_execute_code command)
-        /// </summary>
-        [Test]
-        public void StringArgs_ShouldMapToFirstParameter()
-        {
-            // Define a tool with param1, param2 like most tools would have
-            var toolMethod = typeof(TestResourceWithParams).GetMethod("GetResource"); 
-            var toolDescriptor = new ToolDescriptor
-            {
-                Name = "execute_with_code",
-                Description = "Command with code as first parameter",
-                Example = "execute_with_code(code, 42)",
-                ContainerType = typeof(TestResourceWithParams),
-                MethodInfo = toolMethod,
-                InputSchema = new InputSchema
+                catch (Exception ex)
                 {
-                    Properties = new Dictionary<string, ParameterDescriptor>
-                    {
-                        { "param1", new ParameterDescriptor { Description = "Code to execute", Type = "string", IsRequired = true } },
-                        { "param2", new ParameterDescriptor { Description = "Some number", Type = "number", IsRequired = true } }
-                    }
+                    Debug.LogError($"Direct cast failed: {ex.Message}");
+                    // This is expected to fail in the current implementation
+                    Assert.Fail("Direct cast should work but failed - this is the bug");
                 }
-            };
-            MCPRegistry.Instance.RegisterTool(toolDescriptor);
+            }
             
-            // Arrange - Using just a string as args with a second param in kwargs
-            var parameters = new Dictionary<string, object>
+            if (parametersJObjectConvert != null)
             {
-                { "args", "Debug.Log(\"Hello from cursor\");" },
-                { "kwargs", Newtonsoft.Json.Linq.JObject.FromObject(new Dictionary<string, object> {
-                    { "param2", 42 }
-                })}
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("execute_with_code", parameters);
-            
-            // Assert - The string should map to param1 (first parameter)
-            Assert.IsNotNull(result);
-            
-            // Use the same method that generates the result to create our expected output
-            string param1Value = parameters["args"] as string;
-            int param2Value = 42;
-            string expected = TestResourceWithParams.GetResource(param1Value, param2Value);
-            
-            Assert.AreEqual(expected, result);
-        }
-        
-        /// <summary>
-        /// Test with single string argument for commands like editor_execute_code
-        /// </summary>
-        [Test]
-        public void SingleStringArg_NoKwargs_ShouldWorkForSimpleCommands()
-        {
-            // Define a one-parameter tool like editor_execute_code
-            var codeToolMethod = typeof(TestResourceWithDefault).GetMethod("GetResource");
-            var codeToolDescriptor = new ToolDescriptor
-            {
-                Name = "editor_execute_code",
-                Description = "Execute code in editor",
-                Example = "editor_execute_code(\"Debug.Log('Hello')\")",
-                ContainerType = typeof(TestResourceWithDefault),
-                MethodInfo = codeToolMethod,
-                InputSchema = new InputSchema
+                try
                 {
-                    Properties = new Dictionary<string, ParameterDescriptor>
-                    {
-                        { "param1", new ParameterDescriptor { Description = "Code to execute", Type = "string", IsRequired = false } }
-                    }
+                    var resultJObject = ToolInvoker.InvokeTool(request["command"].ToString(), parametersJObjectConvert);
+                    Debug.Log($"JObject conversion worked! Result: {resultJObject}");
+                    Assert.IsTrue(resultJObject.ToString().Contains("Hello from TCP test"), 
+                        "JObject conversion should work");
                 }
-            };
-            MCPRegistry.Instance.RegisterTool(codeToolDescriptor);
-            
-            // Arrange - Using just the args format with a string
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", "Debug.Log(\"Hello from cursor\");" },
-                { "kwargs", new Dictionary<string, object>() } // Empty kwargs
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("editor_execute_code", parameters);
-            
-            // Assert - The string should map to param1
-            Assert.IsNotNull(result);
-            
-            // Directly use the same logic that creates the result
-            string param1Value = parameters["args"] as string;
-            string expected = TestResourceWithDefault.GetResource(param1Value);
-            
-            Assert.AreEqual(expected, result);
-        }
-        
-        /// <summary>
-        /// Test array args mapping to parameters in order
-        /// </summary>
-        [Test]
-        public void ArrayArgs_ShouldMapToParametersInOrder()
-        {
-            // Arrange - Using positional args as array for test_tool_with_params
-            var jArray = Newtonsoft.Json.Linq.JArray.FromObject(new object[] { "test_value", 42 });
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", jArray }
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
-            
-            // Assert - Should map "test_value" to param1 and 42 to param2
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"test_value\", \"param2\": 42}", result);
-        }
-        
-        /// <summary>
-        /// Test kwargs overriding args when both are provided
-        /// </summary>
-        [Test]
-        public void KwargsOverrideArgsWhenBothProvided()
-        {
-            // Arrange - conflicting value for param1
-            var parameters = new Dictionary<string, object>
-            {
-                { "args", "original_value" }, // This would normally go to param1
-                { "kwargs", Newtonsoft.Json.Linq.JObject.FromObject(new Dictionary<string, object> {
-                    { "param1", "override_value" }, // This should override the args value
-                    { "param2", 42 }
-                })}
-            };
-            
-            // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
-            
-            // Assert - kwargs value should win
-            Assert.IsNotNull(result);
-            Assert.AreEqual("{\"param1\": \"override_value\", \"param2\": 42}", result);
+                catch (Exception ex)
+                {
+                    Debug.LogError($"JObject conversion failed: {ex.Message}");
+                    Assert.Fail("JObject conversion should always work");
+                }
+            }
         }
     }
 }

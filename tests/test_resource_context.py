@@ -9,7 +9,8 @@ import sys
 from typing import Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from server.dynamic_tools import ResourceContext, DynamicToolManager
+from server.resource_context import ResourceContext
+from server.dynamic_tools import DynamicToolManager
 from mcp.server.fastmcp import Context
 
 # Configure logging

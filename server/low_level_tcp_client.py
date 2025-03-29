@@ -20,7 +20,7 @@ import socket
 import time
 from typing import Dict, Any, Optional, List, Union, Callable
 
-logger = logging.getLogger("mcp_client")
+logger = logging.getLogger("low_level_tcp_client")
 
 # Protocol constants
 START_MARKER = 0x02  # STX (Start of Text)
@@ -369,79 +369,6 @@ class LowLevelTcpClient:
         except Exception as e:
             logger.error(f"Error receiving frame: {str(e)}")
             return None
-    
-    async def execute_code(self, code: str) -> Any:
-        """
-        Execute C# code in Unity.
-        
-        Args:
-            code: C# code to execute
-            
-        Returns:
-            Result of the code execution
-        """
-        parameters = {"code": code}
-        return await self.send_command("execute_code", parameters)
-        
-    async def take_screenshot(self, output_path: str, width: int = 1920, height: int = 1080) -> Any:
-        """
-        Take a screenshot in Unity.
-        
-        Args:
-            output_path: Path to save the screenshot
-            width: Width of the screenshot
-            height: Height of the screenshot
-            
-        Returns:
-            Result of the screenshot operation
-        """
-        parameters = {
-            "output_path": output_path,
-            "width": width,
-            "height": height
-        }
-        return await self.send_command("take_screenshot", parameters)
-        
-    async def modify_object(self, object_id: str, property_path: str, property_value: Any) -> Any:
-        """
-        Modify a property of a Unity object.
-        
-        Args:
-            object_id: ID of the object to modify
-            property_path: Path to the property to modify
-            property_value: New value for the property
-            
-        Returns:
-            Result of the modification
-        """
-        parameters = {
-            "object_id": object_id,
-            "property_path": property_path,
-            "property_value": property_value
-        }
-        return await self.send_command("modify_object", parameters)
-        
-    async def get_logs(self, max_logs: int = 100) -> Any:
-        """
-        Get logs from Unity.
-        
-        Args:
-            max_logs: Maximum number of logs to retrieve
-            
-        Returns:
-            Unity logs
-        """
-        parameters = {"max_logs": max_logs}
-        return await self.send_command("get_logs", parameters)
-        
-    async def get_unity_info(self) -> Any:
-        """
-        Get information about the Unity environment.
-        
-        Returns:
-            Unity environment information
-        """
-        return await self.send_command("get_unity_info", None)
     
     def _extract_text_from_content(self, content_array: List[Dict]) -> str:
         """

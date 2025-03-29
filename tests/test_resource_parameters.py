@@ -8,8 +8,9 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp.server.fastmcp import FastMCP, Context
+from server.resource_context import ResourceContext
 from server.connection_manager import UnityConnectionManager
-from server.dynamic_tools import DynamicToolManager, ResourceContext
+from server.dynamic_tools import DynamicToolManager
 from server.dynamic_tool_invoker import DynamicToolInvoker
 
 # Configure logging

@@ -354,29 +354,13 @@ namespace YetAnotherUnityMcp.Editor.Net
                             // Check for direct parameters in the request
                             if (parameters != null)
                             {
-                                // Check for parameters object first (traditional format)
-                                if (parameters.TryGetValue("parameters", out object toolParamsObj))
-                                {
-                                    if (toolParamsObj is Dictionary<string, object> toolParamsDict)
-                                    {
-                                        toolParams = toolParamsDict;
-                                    }
-                                    else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
-                                    {
-                                        // Convert JObject to Dictionary<string, object>
-                                        toolParams = jObject.ToObject<Dictionary<string, object>>();
-                                        Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
-                                    }
-                                    else
-                                    {
-                                        Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
-                                    }
-                                }
-                                
-                                // Check for args/kwargs pattern (directly in parameters)
+                                // First, check for args/kwargs pattern (directly in parameters)
                                 // Copy args/kwargs to tool parameters if they exist
+                                bool hasArgsKwargs = false;
+                                
                                 if (parameters.TryGetValue("args", out object argsObj))
                                 {
+                                    hasArgsKwargs = true;
                                     Debug.Log($"[MCP TCP Server] Found args parameter type: {argsObj?.GetType().Name ?? "null"}");
                                     toolParams["args"] = argsObj;
                                     
@@ -396,6 +380,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                                 
                                 if (parameters.TryGetValue("kwargs", out object kwargsObj))
                                 {
+                                    hasArgsKwargs = true;
                                     Debug.Log($"[MCP TCP Server] Found kwargs parameter type: {kwargsObj?.GetType().Name ?? "null"}");
                                     toolParams["kwargs"] = kwargsObj;
                                     
@@ -406,6 +391,69 @@ namespace YetAnotherUnityMcp.Editor.Net
                                         string kwargsJson = jObject.ToString(Newtonsoft.Json.Formatting.None);
                                         Debug.Log($"[MCP TCP Server] Kwargs JSON: {kwargsJson}");
                                     }
+                                }
+                                
+                                // Check for nested parameters object
+                                if (parameters.TryGetValue("parameters", out object toolParamsObj))
+                                {
+                                    if (toolParamsObj is Dictionary<string, object> toolParamsDict)
+                                    {
+                                        // If not using args/kwargs pattern, use the parameters directly
+                                        if (!hasArgsKwargs)
+                                        {
+                                            toolParams = toolParamsDict;
+                                        }
+                                        // Otherwise add these as additional named parameters
+                                        else
+                                        {
+                                            foreach (var kvp in toolParamsDict)
+                                            {
+                                                toolParams[kvp.Key] = kvp.Value;
+                                            }
+                                        }
+                                    }
+                                    else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
+                                    {
+                                        // Convert JObject to Dictionary<string, object>
+                                        var convertedParams = jObject.ToObject<Dictionary<string, object>>();
+                                        Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
+                                        
+                                        // If not using args/kwargs pattern, use the parameters directly
+                                        if (!hasArgsKwargs)
+                                        {
+                                            toolParams = convertedParams;
+                                        }
+                                        // Otherwise add these as additional named parameters
+                                        else
+                                        {
+                                            foreach (var kvp in convertedParams)
+                                            {
+                                                toolParams[kvp.Key] = kvp.Value;
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
+                                    }
+                                }
+                                
+                                // Check if we should use the parameters themselves as named parameters
+                                // This is the key part that fixes the direct {"code": "..."} format
+                                else if (!hasArgsKwargs)
+                                {
+                                    // Copy all parameters except special ones as named parameters
+                                    foreach (var kvp in parameters)
+                                    {
+                                        // Skip internal parameters like "client_timestamp" that aren't actual tool parameters
+                                        if (kvp.Key != "client_timestamp" && kvp.Key != "request_id")
+                                        {
+                                            toolParams[kvp.Key] = kvp.Value;
+                                        }
+                                    }
+                                    
+                                    // Log what we're using, for debugging
+                                    Debug.Log($"[MCP TCP Server] Using parameters directly as named parameters: {JsonConvert.SerializeObject(toolParams)}");
                                 }
                             }
                             

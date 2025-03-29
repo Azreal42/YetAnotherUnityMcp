@@ -65,13 +65,14 @@ namespace YetAnotherUnityMcp.Runtime
 
         [MCPTool("execute_code", "Execute C# code in Unity", "executeCodeExemple")]
         public static string ExecuteCode([MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code,
-                                         [MCPParameter("additional_using", "Additional references to add to the compilation", "string", false)] List<string> additionalReferences = null,
+                                         [MCPParameter("additional_using", "Additional references to add to the compilation", "string", false)] List<string> additionalUsings = null,
                                          [MCPParameter("additional_assemblies", "Additional assemblies to add to the compilation", "string", false)] List<string> additionalAssemblies = null)
         {
             try
             {
+                StringBuilder result = new StringBuilder();
                 // Prepare the code
-                string codeToCompile = string.Format(ClassTemplate, code);
+                string codeToCompile = string.Format(ClassTemplate, code, additionalUsings);
                 
                 // Create compiler parameters
                 var parameters = new System.CodeDom.Compiler.CompilerParameters
@@ -97,20 +98,21 @@ namespace YetAnotherUnityMcp.Runtime
                     FindUnityModule("UnityEngine.IMGUIModule"),
                 };
 
-                // if (additionalReferences != null)
-                // {
-                //     foreach (var reference in additionalReferences)
-                //     {
-                //         try
-                //         {
-                //             assemblies.Add(FindUnityModule(reference));
-                //         }
-                //         catch (Exception ex)
-                //         {
-                //             results.Warnings.Add(new CompilerWarning(ex.Message));
-                //         }
-                //     }
-                // }
+                if (additionalAssemblies != null)
+                {
+                    foreach (var reference in additionalAssemblies)
+                    {
+                        try
+                        {
+                            assemblies.Add(FindUnityModule(reference));
+                        }
+                        catch (Exception ex)
+                        {
+                            result.AppendLine($"Warning: skipping reference {reference}");
+                            result.AppendLine($"Error when adding it to the compilation: {ex.Message}");
+                        }
+                    }
+                }
 
 
                 assemblies = assemblies.Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
@@ -124,11 +126,11 @@ namespace YetAnotherUnityMcp.Runtime
                 // Check for compilation errors
                 if (results.Errors.HasErrors)
                 {
-                    StringBuilder errorMessage = new StringBuilder("Compilation errors occurred:\n");
+                    result.AppendLine("Compilation errors occurred:");
                     foreach (CompilerError error in results.Errors)
-                        errorMessage.AppendLine($"Line {error.Line}: {error.ErrorText}");
+                        result.AppendLine($"Line {error.Line}: {error.ErrorText}");
                     
-                    return errorMessage.ToString();
+                    return result.ToString();
                 }
                 
                 // Execute the code
@@ -136,8 +138,11 @@ namespace YetAnotherUnityMcp.Runtime
                 Type type = assembly.GetType("YetAnotherUnityMcp.Runtime.CodeExecutor");
                 MethodInfo method = type.GetMethod("Execute");
                 
-                object result = method.Invoke(null, null);
-                return result?.ToString() ?? "Code executed with null result";
+                object methodResult = method.Invoke(null, null);
+                if (result.Length == 0)
+                    result.AppendLine("Code executed successfully:");
+                result.Append($"{methodResult?.ToString() ?? "Code executed with null result"}");
+                return result.ToString();
             }
             catch (Exception ex)
             {

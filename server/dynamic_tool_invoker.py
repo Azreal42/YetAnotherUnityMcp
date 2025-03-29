@@ -5,7 +5,7 @@ import json
 from typing import Dict, Any, Optional
 
 from mcp.server.fastmcp import Context
-from server.dynamic_tools import ResourceContext
+from server.resource_context import ResourceContext
 from server.connection_manager import UnityConnectionManager
 
 logger = logging.getLogger("dynamic_tool_invoker")
@@ -14,7 +14,7 @@ class DynamicToolInvoker:
     def __init__(self, connection_manager: UnityConnectionManager):
         self.connection_manager = connection_manager
 
-    async def invoke_dynamic_tool(self, tool_name: str, params: Dict[str, Any], ctx: Optional[Context] = None, client=None) -> Any:
+    async def invoke_tool(self, tool_name: str, params: Dict[str, Any], ctx: Optional[Context] = None) -> Any:
         """
         Invoke a dynamic tool by name.
         
@@ -98,7 +98,7 @@ class DynamicToolInvoker:
                 }
             }
 
-    async def invoke_dynamic_resource(self, resource_name: str, params: Dict[str, Any] = None, ctx: Optional[Context] = None, client=None) -> Any:
+    async def invoke_resource(self, resource_name: str, params: Dict[str, Any] = None, ctx: Optional[Context] = None, client=None) -> Any:
         """
         Invoke a dynamic resource by name.
         

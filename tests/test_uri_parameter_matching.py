@@ -8,8 +8,9 @@ import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp.server.fastmcp import FastMCP, Context
+from server.resource_context import ResourceContext
 from server.connection_manager import UnityConnectionManager
-from server.dynamic_tools import DynamicToolManager, ResourceContext
+from server.dynamic_tools import DynamicToolManager
 
 # Mock the FunctionResource class for testing
 class MockFunctionResource:

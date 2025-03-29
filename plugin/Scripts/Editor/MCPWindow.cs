@@ -41,6 +41,9 @@ namespace YetAnotherUnityMcp.Editor
             // Log initialization
             Debug.Log("[MCP Server] MCP TCP Server module initialized");
             
+            // Initialize log monitoring system at startup
+            Containers.YaumSpecificMcpContainer.InitializeLogMonitoring();
+            
             // Auto-start server on editor startup (if enabled)
             EditorApplication.delayCall += () => {
                 // Start with a small delay to ensure Unity is fully initialized

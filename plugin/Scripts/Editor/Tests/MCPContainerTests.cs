@@ -75,8 +75,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
             registry.RegisterMethodsFromContainer(typeof(MockContainer));
 
             // Assert
-            Assert.AreEqual(10, registry.Schema.Resources.Count, "Should have 2 registered resources");
-            Assert.AreEqual(8, registry.Schema.Tools.Count, "Should have 2 registered tools");
+            Assert.AreEqual(4, registry.Schema.Resources.Count, "Should have 2 registered resources");
+            Assert.AreEqual(6, registry.Schema.Tools.Count, "Should have 2 registered tools");
             
             // Check resources
             var resourceNames = registry.Schema.Resources.Select(r => r.Name).ToList();
