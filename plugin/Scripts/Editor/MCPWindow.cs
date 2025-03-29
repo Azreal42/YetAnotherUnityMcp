@@ -391,7 +391,7 @@ namespace YetAnotherUnityMcp.Editor
         {
             try
             {
-                var result = Commands.EditorMcpContainer.TakeScreenshot(screenshotPath, screenshotResolution.x, screenshotResolution.y);
+                var result = Commands.EditorMcpContainer.TakeScreenshot(screenshotResolution.x, screenshotResolution.y);
                 lastResponse = $"Screenshot saved: {result}";
                 lastError = "";
             }

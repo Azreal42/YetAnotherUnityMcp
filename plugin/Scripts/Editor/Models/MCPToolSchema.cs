@@ -113,8 +113,14 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <summary>
         /// URL of the image
         /// </summary>
-        [JsonProperty("url")]
+        [JsonProperty("url", NullValueHandling = NullValueHandling.Ignore)]
         public string Url { get; set; }
+        
+        /// <summary>
+        /// Base64 encoded image data
+        /// </summary>
+        [JsonProperty("data", NullValueHandling = NullValueHandling.Ignore)]
+        public string Data { get; set; }
         
         /// <summary>
         /// MIME type of the image
@@ -200,6 +206,45 @@ namespace YetAnotherUnityMcp.Editor.Models
                 },
                 IsError = false
             };
+        }
+        
+        /// <summary>
+        /// Create an image response with base64 encoded data
+        /// </summary>
+        /// <param name="base64Data">Base64 encoded image data</param>
+        /// <param name="mimeType">MIME type of the image</param>
+        /// <param name="caption">Optional caption text to include</param>
+        /// <returns>A new MCP response with image content</returns>
+        public static MCPResponse CreateBase64ImageResponse(string base64Data, string mimeType = "image/jpeg", string caption = null)
+        {
+            var response = new MCPResponse
+            {
+                Content = new List<ContentItem>
+                {
+                    new ContentItem
+                    {
+                        Type = "image",
+                        Image = new ImageContent
+                        {
+                            Data = base64Data,
+                            MimeType = mimeType
+                        }
+                    }
+                },
+                IsError = false
+            };
+            
+            // Add caption if provided
+            if (!string.IsNullOrEmpty(caption))
+            {
+                response.Content.Add(new ContentItem
+                {
+                    Type = "text",
+                    Text = caption
+                });
+            }
+            
+            return response;
         }
         
         /// <summary>

@@ -8,6 +8,7 @@ using System.CodeDom.Compiler;
 using UnityEngine;
 using UnityEditor;
 using Microsoft.CSharp;
+using Newtonsoft.Json;
 using YetAnotherUnityMcp.Editor.Models;
 
 namespace YetAnotherUnityMcp.Editor.Commands
@@ -169,23 +170,22 @@ namespace YetAnotherUnityMcp.Runtime
         #region Screenshots
         
         /// <summary>
-        /// Take a screenshot of the currently active Editor view
+        /// Take a screenshot of the currently active Editor view and return it as base64 encoded image
         /// </summary>
-        /// <param name="outputPath">Path where to save the screenshot</param>
         /// <param name="width">Width of the screenshot (only used for superSize calculation)</param>
         /// <param name="height">Height of the screenshot (only used for superSize calculation)</param>
-        /// <returns>Result message indicating success or failure</returns>
-        [MCPTool("take_screenshot", "Take a screenshot of the Unity Editor", "editor_take_screenshot(output_path=\"screenshot.png\", width=1920, height=1080)")]
+        /// <returns>MCP response with base64 encoded image</returns>
+        [MCPTool("take_screenshot", "Take a screenshot of the Unity Editor", "editor_take_screenshot(width=1920, height=1080, save_path=\"screenshot.png\")")]
         public static string TakeScreenshot(
-            [MCPParameter("output_path", "Path where to save the screenshot", "string", false)] string outputPath = "screenshot.png",
             [MCPParameter("width", "Width of the screenshot", "number", false)] int width = 1920,
             [MCPParameter("height", "Height of the screenshot", "number", false)] int height = 1080)
         {
+            string tempOutputPath = Path.Combine(Application.temporaryCachePath, "temp_screenshot_" + DateTime.Now.Ticks + ".jpg");
             try
-            {
-                // Ensure the directory exists
-                string directory = Path.GetDirectoryName(outputPath);
-                if (!Directory.Exists(directory))
+            {   
+                // Ensure the directory exists - but only if there's a directory to create
+                string directory = Path.GetDirectoryName(tempOutputPath);
+                if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
@@ -221,21 +221,67 @@ namespace YetAnotherUnityMcp.Runtime
                     gameView.Focus();
                 }
 
-                // Delay one frame to ensure the game view is properly focused
-                EditorApplication.delayCall += () =>
-                {
-                    // Take the screenshot using Application.CaptureScreenshot
-                    // This will capture the game view
-                    ScreenCapture.CaptureScreenshot(outputPath, superSize);
-                    
-                    Debug.Log($"Screenshot saved to {outputPath} with superSize {superSize}");
-                };
+                // Take the screenshot directly to a texture
+                RenderTexture rt = new RenderTexture(width, height, 24);
+                RenderTexture.active = rt;
                 
-                return $"Screenshot will be saved to {outputPath}";
+                // Render the screenshot
+                if (gameView != null)
+                {
+                    // Use reflection to call Repaint on the GameView
+                    MethodInfo repaintMethod = gameViewType.GetMethod("Repaint", 
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    
+                    if (repaintMethod != null)
+                    {
+                        repaintMethod.Invoke(gameView, null);
+                    }
+                }
+                
+                // Create a texture and read the screen pixels
+                Texture2D screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
+                screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                screenShot.Apply();
+                
+                // Convert to JPG
+                byte[] bytes = screenShot.EncodeToJPG(90);
+                
+                // Convert to base64 for direct return
+                string base64 = Convert.ToBase64String(bytes);
+                
+                // Cleanup
+                RenderTexture.active = null;
+                GameObject.DestroyImmediate(screenShot);
+                
+                // Create and return the MCP response using the helper method
+                MCPResponse response = MCPResponse.CreateBase64ImageResponse(
+                    base64, 
+                    "image/jpeg",
+                    $"Screenshot captured with dimensions {width}x{height}"
+                );
+                
+                return JsonConvert.SerializeObject(response, Formatting.Indented);
             }
             catch (Exception ex)
             {
-                return $"Error taking screenshot: {ex.Message}\nStackTrace: {ex.StackTrace}";
+                // Return error response using the helper method
+                MCPResponse errorResponse = MCPResponse.CreateErrorResponse($"Error taking screenshot: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                return JsonConvert.SerializeObject(errorResponse, Formatting.Indented);
+            }
+            finally
+            {
+                // Cleanup: delete the temporary file if it exists
+                if (File.Exists(tempOutputPath))
+                {
+                    try
+                    {
+                        File.Delete(tempOutputPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to delete temporary screenshot file: {ex.Message}");
+                    }
+                }
             }
         }
         
