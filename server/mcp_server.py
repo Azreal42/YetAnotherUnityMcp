@@ -45,10 +45,8 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
         # Register connected event handler for dynamic tool registration through the connection manager
         async def connected_callback():
             logger.info("Connection established, registering dynamic tools...")
-            # Get the Unity client from the connection manager
-            unity_client = connection_manager.get_client()
             # Pass the client explicitly (required)
-            dynamic_manager = DynamicToolManager(mcp, unity_client)
+            dynamic_manager = DynamicToolManager(mcp, connection_manager)
             await register_dynamic_tools(dynamic_manager)
             
         connection_manager.add_connection_listener(connected_callback)
