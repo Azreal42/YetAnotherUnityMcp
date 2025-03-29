@@ -203,8 +203,7 @@ async def test_resource_wrapper():
     mock_fastmcp.resource = lambda url_pattern, description="": lambda func: func
     
     # Create a DynamicToolManager with mocked dependencies
-    with patch('server.dynamic_tools.get_client', return_value=mock_client):
-        manager = DynamicToolManager(mock_fastmcp)
+    manager = DynamicToolManager(mock_fastmcp, mock_client)
         
         # Manually create the function and wrapper components
         

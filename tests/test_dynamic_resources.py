@@ -9,10 +9,9 @@ from typing import Dict, Any, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 from server.dynamic_tools import DynamicToolManager, get_manager
-from server.unity_tcp_client import get_client
 
 # Helper function for invoking dynamic resources
-async def invoke_dynamic_resource(resource_name: str, parameters: Optional[Dict[str, Any]] = None):
+async def invoke_dynamic_resource(client, resource_name: str, parameters: Optional[Dict[str, Any]] = None):
     """
     Invoke a dynamic resource.
     
@@ -26,7 +25,6 @@ async def invoke_dynamic_resource(resource_name: str, parameters: Optional[Dict[
     if parameters is None:
         parameters = {}
         
-    client = get_client()
     return await client.send_command("access_resource", {
         "resource_name": resource_name,
         "parameters": parameters
@@ -34,12 +32,11 @@ async def invoke_dynamic_resource(resource_name: str, parameters: Optional[Dict[
 
 # Import or define the necessary functions
 # This should match the implementation in test_dynamic_tools.py
-async def invoke_dynamic_resource(resource_name: str, parameters: Dict[str, Any] = None):
+async def invoke_dynamic_resource(client, resource_name: str, parameters: Dict[str, Any] = None):
     """Helper function to invoke a dynamic resource"""
     if parameters is None:
         parameters = {}
         
-    client = get_client()
     return await client.send_command("access_resource", {
         "resource_name": resource_name,
         "parameters": parameters
@@ -53,11 +50,10 @@ logger = logging.getLogger("test_dynamic_resources")
 pytestmark = pytest.mark.asyncio
 
 # Helper function for resource invocation
-async def invoke_dynamic_resource(resource_name, parameters=None):
+async def invoke_dynamic_resource(client, resource_name, parameters=None):
     """Invoke a dynamic resource with the given parameters"""
     if parameters is None:
         parameters = {}
-    client = get_client()
     return await client.send_command("access_resource", {
         "resource_name": resource_name, 
         "parameters": parameters
@@ -78,14 +74,13 @@ class TestDynamicResources:
         client = connected_client
         logger.info(f"Client type: {type(client)}")
         
-        # Get dynamic tool manager with patched client
+        # Get dynamic tool manager with client directly
         logger.info("Creating dynamic tool manager...")
-        with patch('server.dynamic_tools.get_client', return_value=client):
-            manager = get_manager(mcp_test_instance)
+        manager = get_manager(mcp_test_instance, client)
             
-            # Register resources from schema with timeout
-            logger.info("Registering resources from schema...")
-            result = await asyncio.wait_for(manager.register_from_schema(), timeout=10.0)
+        # Register resources from schema with timeout
+        logger.info("Registering resources from schema...")
+        result = await asyncio.wait_for(manager.register_from_schema(), timeout=10.0)
         
         assert result is True, "Failed to register resources from schema"
         
@@ -190,10 +185,9 @@ class TestDynamicResources:
         logger.info("Using connected client...")
         client = connected_client
         
-        # Create dynamic tool manager with patched client
+        # Create dynamic tool manager with client directly
         logger.info("Creating tool manager for custom resource tests...")
-        with patch('server.dynamic_tools.get_client', return_value=client):
-            manager = DynamicToolManager(mcp_test_instance)
+        manager = DynamicToolManager(mcp_test_instance, client)
         
         # Define test cases - map of URL patterns to expected parameter sets
         test_cases = {
@@ -473,45 +467,44 @@ class TestDynamicResourcesMocked:
     @pytest.mark.asyncio
     async def test_resource_parameter_extraction(self, mock_unity_client, mcp_test_instance):
         """Test extracting parameters from resource URL patterns"""
-        # Create dynamic tool manager
-        with patch('server.dynamic_tools.get_client', return_value=mock_unity_client):
-            manager = DynamicToolManager(mcp_test_instance)
+        # Create dynamic tool manager with client directly
+        manager = DynamicToolManager(mcp_test_instance, mock_unity_client)
             
-            # Register resources from schema
-            result = await manager.register_from_schema()
+        # Register resources from schema
+        result = await manager.register_from_schema()
+        
+        assert result is True, "Failed to register resources from schema"
+        assert len(manager.registered_resources) > 0, "No resources were registered"
+        
+        # Test parameter extraction from different patterns
+        resource_patterns = {
+            "unity://info": 0,
+            "unity://logs/{max_logs}": 1,
+            "unity://gameobject/{id}/properties/{property_name}": 2,
+            "unity://scene/{scene_name}/{detail_level}": 2
+        }
+        
+        for pattern, expected_param_count in resource_patterns.items():
+            # Find resource with this pattern
+            matching_resources = [name for name, url in manager.registered_resources.items() 
+                                    if url == pattern]
             
-            assert result is True, "Failed to register resources from schema"
-            assert len(manager.registered_resources) > 0, "No resources were registered"
-            
-            # Test parameter extraction from different patterns
-            resource_patterns = {
-                "unity://info": 0,
-                "unity://logs/{max_logs}": 1,
-                "unity://gameobject/{id}/properties/{property_name}": 2,
-                "unity://scene/{scene_name}/{detail_level}": 2
-            }
-            
-            for pattern, expected_param_count in resource_patterns.items():
-                # Find resource with this pattern
-                matching_resources = [name for name, url in manager.registered_resources.items() 
-                                     if url == pattern]
+            if not matching_resources:
+                continue
                 
-                if not matching_resources:
-                    continue
-                    
-                resource_name = matching_resources[0]
-                
-                # Extract parameters 
-                param_names = []
-                parts = pattern.split('/')
-                for part in parts:
-                    if part.startswith('{') and part.endswith('}'):
-                        param_name = part[1:-1]
-                        param_names.append(param_name)
-                
-                # Check parameter count matches expected
-                assert len(param_names) == expected_param_count, \
-                    f"Resource {resource_name} has {len(param_names)} parameters, expected {expected_param_count}"
+            resource_name = matching_resources[0]
+            
+            # Extract parameters 
+            param_names = []
+            parts = pattern.split('/')
+            for part in parts:
+                if part.startswith('{') and part.endswith('}'):
+                    param_name = part[1:-1]
+                    param_names.append(param_name)
+            
+            # Check parameter count matches expected
+            assert len(param_names) == expected_param_count, \
+                f"Resource {resource_name} has {len(param_names)} parameters, expected {expected_param_count}"
     
     @pytest.mark.asyncio
     async def test_mocked_resource_invocation(self, mock_unity_client, mcp_test_instance):
@@ -527,8 +520,8 @@ class TestDynamicResourcesMocked:
             manager_mock.execute_with_reconnect = AsyncMock(side_effect=lambda func: func())
             mock_connection_manager.return_value = manager_mock
             
-            # Register tools
-            tool_manager = DynamicToolManager(mcp_test_instance)
+            # Register tools with client directly
+            tool_manager = DynamicToolManager(mcp_test_instance, mock_unity_client)
             await tool_manager.register_from_schema()
             
             # Test invoking resources with different parameter counts

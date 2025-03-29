@@ -37,22 +37,22 @@ TEST_SCHEMA = {
         {
             "name": "unity_info",
             "description": "Get Unity information",
-            "urlPattern": "unity://info"
+            "uri": "unity://info"
         },
         {
             "name": "logs",
             "description": "Get Unity logs",
-            "urlPattern": "unity://logs/{max_logs}"
+            "uri": "unity://logs/{max_logs}"
         },
         {
             "name": "object_properties",
             "description": "Get GameObject properties",
-            "urlPattern": "unity://gameobject/{id}/properties/{property_name}"
+            "uri": "unity://gameobject/{id}/properties/{property_name}"
         },
         {
             "name": "scene",
             "description": "Get scene information with optional parameters",
-            "urlPattern": "unity://scene/{scene_name}/{detail_level}"
+            "uri": "unity://scene/{scene_name}/{detail_level}"
         }
     ]
 }
@@ -124,9 +124,9 @@ def mock_context():
 @pytest.fixture
 def dynamic_manager(mock_fastmcp, mock_client):
     """Create a DynamicToolManager with mocked dependencies"""
-    with patch('server.dynamic_tools.get_client', return_value=mock_client):
-        manager = DynamicToolManager(mock_fastmcp)
-        return manager
+    # Directly pass the client rather than patching get_client
+    manager = DynamicToolManager(mock_fastmcp, mock_client)
+    return manager
 
 # Tests for resource parameter handling
 
@@ -162,7 +162,7 @@ async def test_no_parameter_resource(dynamic_manager, mock_client, mock_context)
     resource_name = "unity_info"
     
     # Get the registered function
-    registered_func = dynamic_manager.mcp.registered_resources[resource_name]["func"]
+    registered_func = dynamic_manager.registered_resources[resource_name]["func"]
     
     # Call the function with the context
     with ResourceContext.with_context(mock_context):
@@ -188,7 +188,7 @@ async def test_single_parameter_resource(dynamic_manager, mock_client, mock_cont
     resource_name = "logs"
     
     # Get the registered function
-    registered_func = dynamic_manager.mcp.registered_resources[resource_name]["func"]
+    registered_func = dynamic_manager.registered_resources[resource_name]["func"]
     
     # Call the function with the context and parameter
     max_logs = 10
@@ -216,7 +216,7 @@ async def test_multi_parameter_resource(dynamic_manager, mock_client, mock_conte
     resource_name = "object_properties"
     
     # Get the registered function
-    registered_func = dynamic_manager.mcp.registered_resources[resource_name]["func"]
+    registered_func = dynamic_manager.registered_resources[resource_name]["func"]
     
     # Call the function with the context and parameters
     id_value = "cube01"
@@ -320,7 +320,7 @@ async def test_parameter_mismatch_handling(dynamic_manager, mock_client, mock_co
     resource_name = "scene"
     
     # Get the registered function
-    registered_func = dynamic_manager.mcp.registered_resources[resource_name]["func"]
+    registered_func = dynamic_manager.registered_resources[resource_name]["func"]
     
     # Call with all parameters
     with ResourceContext.with_context(mock_context):
@@ -350,7 +350,7 @@ async def test_function_signature_checking(dynamic_manager):
     await dynamic_manager.register_from_schema()
     
     # Get all registered resources
-    resources = dynamic_manager.mcp.registered_resources
+    resources = dynamic_manager.registered_resources
     
     # Check signatures using introspection
     import inspect

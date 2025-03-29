@@ -7,10 +7,13 @@ import re
 import threading
 from typing import Any, Dict, List, Optional, Callable, Awaitable, Set, Union
 
+from mcp.server.fastmcp.resources import FunctionResource
 from mcp.server.fastmcp.tools import Tool
 from mcp.server.fastmcp import FastMCP, Context
-from server.unity_client_util import execute_unity_operation
-from server.unity_tcp_client import get_client
+from pydantic import AnyUrl
+
+from server.connection_manager import UnityConnectionManager
+from server.unity_client_util import UnityClientUtil
 
 # Add ResourceContext class to store context in thread-local storage
 class ResourceContext:
@@ -52,15 +55,9 @@ class DynamicToolManager:
     Manager for dynamically registering tools and resources based on Unity schema.
     """
     
-    def __init__(self, mcp: FastMCP):
-        """
-        Initialize the dynamic tool manager.
-        
-        Args:
-            mcp: FastMCP instance
-        """
+    def __init__(self, mcp: FastMCP, connection_manager: UnityConnectionManager):
         self.mcp = mcp
-        self.client = get_client()
+        self.connection_manager = connection_manager
         self.registered_tools: Dict[str, str] = {}
         self.registered_resources: Dict[str, str] = {}
         
@@ -75,7 +72,7 @@ class DynamicToolManager:
         
         try:
             # Get schema from Unity
-            schema_result = await self.client.get_schema()
+            schema_result = await self.connection_manager.client.get_schema()
             
             # Debug the schema structure
             logger.debug(f"Schema result type: {type(schema_result)}")
@@ -133,7 +130,7 @@ class DynamicToolManager:
         # Handle different schema structures
         if isinstance(schema, dict):
             # Case 1: Schema already has tools and resources at top level
-            if 'tools' in schema and 'resources' in schema:
+            if 'tools' in schema or 'resources' in schema:
                 logger.info("Schema has tools and resources directly at the top level")
                 return schema
                 
@@ -228,9 +225,10 @@ class DynamicToolManager:
                     
             try:
                 await ctx.info(f"Executing dynamic tool {tool_name} with params: {json.dumps(params)}")
-                result = await execute_unity_operation(
+                result = await UnityClientUtil.execute_unity_operation(
+                    self.connection_manager,
                     f"dynamic tool {tool_name}",
-                    lambda: self.client.send_command(tool_name, params),
+                    lambda: self.connection_manager.client.send_command(tool_name, params),
                     ctx,
                     f"Error executing {tool_name}"
                 )
@@ -276,8 +274,8 @@ class DynamicToolManager:
             logger.debug(f"Resource {resource_name} already registered, skipping")
             return
             
-        # Check for both uri (new MCP format) and urlPattern (backward compatibility)
-        uri = resource_schema.get('uri') or resource_schema.get('urlPattern')
+        # Check for both uri
+        uri = resource_schema.get('uri')
         if not uri:
             logger.warning(f"Resource {resource_name} has no URI, skipping")
             return
@@ -308,17 +306,65 @@ class DynamicToolManager:
                 logger.info(f"When accessing this resource, use snake_case in Python: {snake_case_examples}")
                 logger.info(f"Parameters will be automatically converted back to camelCase when sent to Unity")
         
-        # Use a static resource handler that doesn't need to match URI parameters
-        # This avoids FastMCP's parameter validation issues
+    
+        # Store the resource in our registry with all relevant info
+        self.registered_resources[resource_name] = {
+            "uri": uri,
+            "description": description,
+            "uri_params": parameters
+        }
         
-        # Store the resource in our registry
-        self.registered_resources[resource_name] = uri
+        # Create a dynamic resource handler function
+        async def dynamic_resource_handler(ctx: Context, *args, **kwargs):
+            """Dynamic resource handler function"""
+            # Convert positional args to named parameters
+            param_dict = {}
+            
+            # Map positional args to parameters from URI
+            for i, param_name in enumerate(parameters):
+                if i < len(args):
+                    param_dict[param_name] = args[i]
+            
+            # Add any keyword args
+            param_dict.update(kwargs)
+            
+            logger.info(f"Accessing dynamic resource {resource_name} with params: {param_dict}")
+            
+            try:
+                # Execute the resource access
+                result = await UnityClientUtil.execute_unity_operation(
+                    self.connection_manager,
+                    f"dynamic resource {resource_name}",
+                    lambda: self.connection_manager.client.send_command("access_resource", {
+                        "resource_name": resource_name,
+                        "parameters": param_dict
+                    }),
+                    ctx,
+                    f"Error accessing {resource_name}"
+                )
+                return result
+            except Exception as e:
+                logger.error(f"Error in dynamic resource {resource_name}: {str(e)}")
+                raise
         
-        # Skip registration with FastMCP for now to avoid parameter mismatch errors
-        # Just log that we've "registered" it
-        logger.info(f"Registered resource {resource_name} with URI: {uri} (FastMCP registration skipped)")
+        # Create the FunctionResource with the required fn parameter
+        try:
+            resource = FunctionResource(
+                uri=AnyUrl(uri),  # FastMCP uses uri even for parameterized URIs
+                name=resource_name,
+                description=description,
+                mime_type=mime_type or "text/plain",
+                fn=dynamic_resource_handler,  # Add the required fn parameter
+            )
+            self.mcp._resource_manager.add_resource(resource)
+            
+            # Add the function to our registry
+            self.registered_resources[resource_name]["func"] = dynamic_resource_handler
+            
+            logger.info(f"Successfully registered dynamic resource: {resource_name}")
+        except Exception as e:
+            logger.error(f"Error registering resource: {e}")
         
-        # Return success
         return
     
     @staticmethod
@@ -328,27 +374,5 @@ class DynamicToolManager:
         name = name.replace("Id", "_id").replace("Name", "_name")
         # Handle the general case
         return ''.join(['_' + c.lower() if c.isupper() else c.lower() for c in name]).lstrip('_')
-        return
-                
-# Singleton instance for easy access
-_instance: Optional[DynamicToolManager] = None
 
-def get_manager(mcp: FastMCP) -> DynamicToolManager:
-    """
-    Get the dynamic tool manager instance.
-    
-    Args:
-        mcp: FastMCP instance
-        
-    Returns:
-        Dynamic tool manager instance
-    """
-    global _instance
-    if _instance is None:
-        logger.info("Creating new DynamicToolManager instance")
-        _instance = DynamicToolManager(mcp)
-    else:
-        logger.info("Returning existing DynamicToolManager instance")
-        # Ensure we're using the same FastMCP instance
-        _instance.mcp = mcp
-    return _instance
+                

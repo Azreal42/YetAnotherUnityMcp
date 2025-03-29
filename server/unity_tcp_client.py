@@ -190,21 +190,3 @@ class UnityTcpClient:
             error: Error message
         """
         await self._trigger_callbacks("error", error)
-
-# Singleton instance for easy access
-_instance: Optional[UnityTcpClient] = None
-
-def get_client(url: str = "tcp://localhost:8080/") -> UnityTcpClient:
-    """
-    Get the Unity TCP client instance.
-    
-    Args:
-        url: TCP server URL (tcp://host:port/)
-        
-    Returns:
-        Unity TCP client instance
-    """
-    global _instance
-    if _instance is None:
-        _instance = UnityTcpClient(url)
-    return _instance

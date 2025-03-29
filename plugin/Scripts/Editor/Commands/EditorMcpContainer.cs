@@ -30,6 +30,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEditor;
 using Object = UnityEngine.Object;
+{1}
 
 namespace YetAnotherUnityMcp.Runtime
 {{
@@ -56,8 +57,16 @@ namespace YetAnotherUnityMcp.Runtime
         /// </summary>
         /// <param name="code">The C# code to execute</param>
         /// <returns>Result of the execution</returns>
-        [MCPTool("execute_code", "Execute C# code in Unity", "editor_execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")")]
-        public static string ExecuteCode([MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code)
+        const string executeCodeExemple = 
+            "editor_execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")\n" +
+            "editor_execute_code(code=\"Debug.Log(\\\"Hello from AI\\\"); return 42;\",\n" +
+            "                    additional_using=[\"Newtonsoft.Json.Linq\", \"System.IO\"],\n" +
+            "                    additional_assemblies=[\"UnityEngine.PhysicsModule\", \"UnityEngine.UI\"])\n";
+
+        [MCPTool("execute_code", "Execute C# code in Unity", "executeCodeExemple")]
+        public static string ExecuteCode([MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code,
+                                         [MCPParameter("additional_using", "Additional references to add to the compilation", "string", false)] List<string> additionalReferences = null,
+                                         [MCPParameter("additional_assemblies", "Additional assemblies to add to the compilation", "string", false)] List<string> additionalAssemblies = null)
         {
             try
             {
@@ -87,6 +96,22 @@ namespace YetAnotherUnityMcp.Runtime
                     FindUnityModule("UnityEngine.InputModule"),
                     FindUnityModule("UnityEngine.IMGUIModule"),
                 };
+
+                // if (additionalReferences != null)
+                // {
+                //     foreach (var reference in additionalReferences)
+                //     {
+                //         try
+                //         {
+                //             assemblies.Add(FindUnityModule(reference));
+                //         }
+                //         catch (Exception ex)
+                //         {
+                //             results.Warnings.Add(new CompilerWarning(ex.Message));
+                //         }
+                //     }
+                // }
+
 
                 assemblies = assemblies.Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
                 foreach (var assemblyPath in assemblies)

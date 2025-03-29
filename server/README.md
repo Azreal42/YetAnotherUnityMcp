@@ -7,10 +7,9 @@ This module provides the Python client implementation for communicating with the
 The main components of the client are:
 
 ### Core Client
-- `websocket_client.py`: Contains the `UnityTcpClient` class that handles the low-level TCP communication, message framing, and command execution. (Despite the file name, it uses TCP sockets, not WebSockets - the filename is kept for backward compatibility).
-
-### Legacy Support
-- `unity_socket_client.py`: Legacy wrapper that delegates to `UnityTcpClient` for backward compatibility.
+- `unity_tcp_client.py`: Contains the `UnityTcpClient` class that handles the high-level communication with Unity.
+- `low_level_tcp_client.py`: Contains the `LowLevelTcpClient` class that handles the low-level TCP communication, message framing, and binary protocol.
+- `unity_client_util.py`: Provides utility functions for Unity client operations with proper error handling.
 
 ## Connection Protocol
 The client uses a custom framing protocol for reliable communication over TCP:
@@ -31,7 +30,7 @@ The client uses a custom framing protocol for reliable communication over TCP:
 ## Usage
 
 ```python
-from server.websocket_client import UnityTcpClient
+from server.unity_tcp_client import UnityTcpClient
 
 # Create client instance
 client = UnityTcpClient("tcp://localhost:8080/")

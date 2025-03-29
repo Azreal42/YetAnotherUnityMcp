@@ -34,16 +34,21 @@ async def server_lifespan(server: Any) -> AsyncIterator[Dict[str, Any]]:
     logger.info("Server starting: initializing Unity TCP client...")
     
     try:
-        from server.dynamic_tools import get_manager
-        from server.connection_manager import get_unity_connection_manager
+        from server.dynamic_tools import DynamicToolManager
+        from server.connection_manager import UnityConnectionManager
+        from server.unity_tcp_client import UnityTcpClient
 
         # Get the connection manager
-        connection_manager = get_unity_connection_manager()
+        client = UnityTcpClient("tcp://localhost:8080/")
+        connection_manager = UnityConnectionManager(client)
         
         # Register connected event handler for dynamic tool registration through the connection manager
         async def connected_callback():
             logger.info("Connection established, registering dynamic tools...")
-            dynamic_manager = get_manager(mcp)
+            # Get the Unity client from the connection manager
+            unity_client = connection_manager.get_client()
+            # Pass the client explicitly (required)
+            dynamic_manager = DynamicToolManager(mcp, unity_client)
             await register_dynamic_tools(dynamic_manager)
         connection_manager.add_connection_listener(connected_callback)
 

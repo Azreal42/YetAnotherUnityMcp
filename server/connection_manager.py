@@ -1,29 +1,11 @@
-"""
-DEPRECATED: Connection manager for WebSocket/TCP connections.
-
-This module contains two connection managers:
-1. ConnectionManager - A server-side FastAPI WebSocket connection manager (deprecated)
-2. UnityConnectionManager - A client-side connection manager for Unity TCP connections
-
-The server-side ConnectionManager class is no longer used and will be removed in a future version.
-Only the UnityConnectionManager is actively maintained.
-"""
-
 import warnings
 
-# Show deprecation warning for ConnectionManager
-warnings.warn(
-    "ConnectionManager class is deprecated and will be removed in a future version. "
-    "Only UnityConnectionManager should be used.",
-    DeprecationWarning,
-    stacklevel=2
-)
 
 import asyncio
 import logging
 import time
 from typing import List, Optional, Callable, Dict, Any
-from server.unity_tcp_client import get_client
+from server.unity_tcp_client import UnityTcpClient
 logger = logging.getLogger("mcp_server")
 
 
@@ -34,10 +16,10 @@ class UnityConnectionManager:
     """
     
     def __init__(self, 
-                url: str = "tcp://localhost:8080/",
-                reconnect_attempts: int = 5, 
-                reconnect_delay: float = 2.0,
-                auto_reconnect: bool = True):
+                 client: UnityTcpClient,
+                 reconnect_attempts: int = 5, 
+                 reconnect_delay: float = 2.0,
+                 auto_reconnect: bool = True):
         """
         Initialize the connection manager.
         
@@ -46,7 +28,7 @@ class UnityConnectionManager:
             reconnect_delay: Delay between reconnection attempts in seconds
             auto_reconnect: Whether to automatically reconnect on disconnect
         """
-        self.client = get_client(url)
+        self.client = client
         self.reconnect_attempts = reconnect_attempts
         self.reconnect_delay = reconnect_delay
         self.auto_reconnect = auto_reconnect
@@ -237,6 +219,15 @@ class UnityConnectionManager:
         """
         if listener in self.disconnection_listeners:
             self.disconnection_listeners.remove(listener)
+            
+    def get_client(self):
+        """
+        Get the Unity TCP client instance.
+        
+        Returns:
+            The Unity TCP client instance
+        """
+        return self.client
     
     async def _notify_connection_listeners(self) -> None:
         """
@@ -257,18 +248,3 @@ class UnityConnectionManager:
                 await listener()
             except Exception as e:
                 logger.error(f"Error in disconnection listener: {str(e)}")
-
-# Singleton instance for easy access
-_unity_connection_manager: Optional[UnityConnectionManager] = None
-
-def get_unity_connection_manager() -> UnityConnectionManager:
-    """
-    Get the Unity connection manager instance.
-    
-    Returns:
-        Unity connection manager instance
-    """
-    global _unity_connection_manager
-    if _unity_connection_manager is None:
-        _unity_connection_manager = UnityConnectionManager()
-    return _unity_connection_manager

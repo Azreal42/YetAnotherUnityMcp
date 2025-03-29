@@ -40,3 +40,13 @@ ENV/
 
 # FastMCP temp files
 .fastmcp/
+
+# Repomix files
+.repomixignore
+repomix.config.json
+repomix-output.md
+repomix-output.xml
+
+# Debug schema files
+*_schema_debug.json
+*_schema_debug_*.json

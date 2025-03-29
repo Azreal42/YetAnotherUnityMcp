@@ -226,17 +226,6 @@ namespace YetAnotherUnityMcp.Editor
                 
                 EditorGUILayout.Space();
                 
-                // Modify object section
-                EditorGUILayout.LabelField("Modify Object", EditorStyles.boldLabel);
-                objectId = EditorGUILayout.TextField("Object ID", objectId);
-                propertyName = EditorGUILayout.TextField("Property Path", propertyName);
-                propertyValue = EditorGUILayout.TextField("Property Value", propertyValue);
-                if (GUILayout.Button("Modify Object"))
-                {
-                    ModifyObject();
-                }
-                
-                EditorGUILayout.Space();
                 
                 // Get logs section
                 if (GUILayout.Button("Get Logs"))
@@ -406,31 +395,6 @@ namespace YetAnotherUnityMcp.Editor
             catch (Exception ex)
             {
                 lastError = $"Error taking screenshot: {ex.Message}";
-            }
-            
-            Repaint();
-        }
-        
-        private void ModifyObject()
-        {
-            try
-            {
-                // Try to parse property value as float first
-                float floatValue;
-                object value = propertyValue;
-                
-                if (float.TryParse(propertyValue, out floatValue))
-                {
-                    value = floatValue;
-                }
-                
-                var result = Commands.ObjectMcpContainer.ModifyObject(objectId, propertyName, value);
-                lastResponse = $"Object modified: {result}";
-                lastError = "";
-            }
-            catch (Exception ex)
-            {
-                lastError = $"Error modifying object: {ex.Message}";
             }
             
             Repaint();

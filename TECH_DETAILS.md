@@ -481,15 +481,6 @@ This system provides several benefits:
 - **Robust Schema Parsing**: The system can handle various schema formats and extract tools/resources correctly.
 - **Error Resilience**: The registration process can continue even if some tools or resources fail to register.
 
-Example of dynamic tool registration:
-
-```python
-# Get the dynamic tool manager
-from server.dynamic_tools import get_manager
-manager = get_manager(mcp_instance)
-
-# Register tools from schema
-await manager.register_from_schema()
 
 # All tools from Unity are now available in the MCP instance
 ```
