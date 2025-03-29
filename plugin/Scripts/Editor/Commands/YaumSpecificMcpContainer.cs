@@ -83,18 +83,23 @@ namespace YetAnotherUnityMcp.Editor.Containers
             }
         }
         
+        // Track the last log index that was sent
+        private static int _lastLogIndexSent = -1;
+        
         /// <summary>
         /// Get logs from the Unity Editor console
         /// </summary>
         /// <param name="maxLogs">Maximum number of logs to return</param>
+        /// <param name="onlyNewLogs">If true, only logs that haven't been sent previously will be returned</param>
         /// <returns>JSON string with logs</returns>
         [MCPTool("unity_logs", "Get logs from the Unity Editor console")]
         public static string GetLogs(
-            [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100)
+            [MCPParameter("max_logs", "Maximum number of logs to retrieve", "number", false)] int maxLogs = 100,
+            [MCPParameter("only_new_logs", "If true, only logs that haven't been sent previously will be returned", "boolean", false)] bool onlyNewLogs = false)
         {
             try
             {
-                var logs = GetConsoleLogs(maxLogs);
+                var logs = GetConsoleLogs(maxLogs, onlyNewLogs);
                 
                 StringBuilder result = new StringBuilder();
                 result.AppendLine("{");
@@ -120,7 +125,10 @@ namespace YetAnotherUnityMcp.Editor.Containers
                     }
                 }
                 
-                result.AppendLine("  ]");
+                result.AppendLine("  ],");
+                result.AppendLine($"  \"total_log_count\": {_cachedLogs.Count},");
+                result.AppendLine($"  \"returned_log_count\": {logs.Count},");
+                result.AppendLine($"  \"only_new_logs\": {onlyNewLogs.ToString().ToLower()}");
                 result.AppendLine("}");
                 
                 return result.ToString();
@@ -222,21 +230,57 @@ namespace YetAnotherUnityMcp.Editor.Containers
         /// Get console logs from Unity Editor
         /// </summary>
         /// <param name="maxLogs">Maximum number of logs to retrieve</param>
+        /// <param name="onlyNewLogs">If true, only get logs that haven't been sent before</param>
         /// <returns>List of log entries</returns>
-        private static System.Collections.Generic.List<LogEntry> GetConsoleLogs(int maxLogs)
+        private static System.Collections.Generic.List<LogEntry> GetConsoleLogs(int maxLogs, bool onlyNewLogs)
         {
-            
             // Create a copy of the logs to return
             var logs = new System.Collections.Generic.List<LogEntry>();
             
-            // Get the most recent logs, up to maxLogs
-            int count = Math.Min(maxLogs, _cachedLogs.Count);
-            for (int i = _cachedLogs.Count - count; i < _cachedLogs.Count; i++)
+            // Starting index depends on whether we want only new logs
+            int startIndex;
+            
+            if (onlyNewLogs && _lastLogIndexSent >= 0)
             {
-                logs.Add(_cachedLogs[i]);
+                // If we want only new logs, start after the last index we sent
+                startIndex = Math.Max(_lastLogIndexSent + 1, 0);
+                
+                // If we've sent all logs, return empty list
+                if (startIndex >= _cachedLogs.Count)
+                {
+                    // If no logs are available, add a placeholder
+                    logs.Add(new LogEntry
+                    {
+                        Type = "Info",
+                        Message = "No new logs since last request",
+                        StackTrace = "",
+                        Timestamp = DateTime.Now
+                    });
+                    
+                    return logs;
+                }
+            }
+            else
+            {
+                // If we want all logs (limited by maxLogs), start from the end and go back maxLogs
+                int count = Math.Min(maxLogs, _cachedLogs.Count);
+                startIndex = _cachedLogs.Count - count;
             }
             
-            // If no logs are available, add a placeholder
+            // Get the logs starting from startIndex, up to maxLogs or the end of the list
+            int remaining = Math.Min(maxLogs, _cachedLogs.Count - startIndex);
+            for (int i = 0; i < remaining; i++)
+            {
+                logs.Add(_cachedLogs[startIndex + i]);
+            }
+            
+            // Remember the index of the last log we sent
+            if (_cachedLogs.Count > 0)
+            {
+                _lastLogIndexSent = _cachedLogs.Count - 1;
+            }
+            
+            // If no logs are available after all that, add a placeholder
             if (logs.Count == 0)
             {
                 logs.Add(new LogEntry
