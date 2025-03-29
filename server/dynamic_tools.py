@@ -4,7 +4,7 @@ import logging
 import inspect
 import json
 import re
-from typing import Any, Dict, List, Optional, Callable, Awaitable, Set, Union
+from typing import Any, Dict, List, Optional, Callable, Awaitable, Sequence, Set, Union
 
 from mcp.server.fastmcp.resources import FunctionResource
 from mcp.server.fastmcp.tools import Tool
@@ -144,6 +144,84 @@ class DynamicToolManager:
         
         logger.error("Could not find valid schema structure")
         return {}
+    
+    @staticmethod
+    def func_metadata(dynamic_func: Callable[..., Any], input_schema: Dict[str, Any] = None) -> Any:
+        """Given a function and an input schema, return metadata including a pydantic model representing its signature.
+        
+        This creates a pydantic model based on the input schema that can validate parameters
+        before passing them to the dynamic tool function.
+        
+        Args:
+            dynamic_func: The function to create metadata for
+            input_schema: The JSON schema describing the function's parameters (optional)
+                
+        Returns:
+            A FuncMetadata object with an arg_model that can validate parameters
+        """
+        # If no input_schema is provided, create a very basic one
+        if input_schema is None:
+            logger.warning("No input schema provided for func_metadata, creating a basic schema")
+            input_schema = {"properties": {}, "required": []}
+        
+
+        # Import the necessary modules from the FastMCP library
+        from pydantic import create_model, Field
+        from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata, ArgModelBase
+        
+        
+        # Get the properties from the input schema
+        properties = input_schema.get('properties', {})
+        required_params = input_schema.get('required', [])
+        
+        # Create a mapping of parameter names to their types and field info
+        dynamic_pydantic_model_params = {}
+        
+        for param_name, param_schema in properties.items():
+            # Skip parameters that start with underscore (following the same pattern as in inspect-based implementation)
+            if param_name.startswith('_'):
+                logger.warning(f"Parameter {param_name} of {dynamic_func.__name__} starts with '_' and will be skipped")
+                continue
+            
+            # Determine if parameter is required
+            is_required = param_name in required_params
+            
+            # Get parameter type based on JSON schema
+            param_type = param_schema.get('type', 'string')
+            
+            # Map JSON schema types to Python types
+            type_mapping = {
+                'string': str,
+                'integer': int,
+                'number': float,
+                'boolean': bool,
+                'array': list,
+                'object': dict,
+                'null': type(None)
+            }
+            
+            python_type = type_mapping.get(param_type, Any)
+            description = param_schema.get('description', f'Parameter {param_name}')
+            
+            # Create field info with appropriate settings
+            field_info = Field(
+                description=description,
+                title=param_name,
+                default=... if is_required else None,  # Use ellipsis for required params
+            )
+            
+            # Add to model parameters dictionary
+            dynamic_pydantic_model_params[param_name] = (python_type, field_info)
+        
+        # Create the Pydantic model for function arguments
+        arguments_model = create_model(
+            f"{dynamic_func.__name__}Arguments",
+            **dynamic_pydantic_model_params,
+            __base__=ArgModelBase
+        )
+        
+        # Create and return the FuncMetadata
+        return FuncMetadata(arg_model=arguments_model)
             
     async def _register_tool(self, tool_schema: Dict[str, Any]) -> None:
         """
@@ -202,21 +280,28 @@ class DynamicToolManager:
             except Exception as e:
                 await ctx.error(f"Error in dynamic tool {tool_name}: {str(e)}")
                 raise
-                
-        # Register the tool with FastMCP
-        # Use the default Tool.from_function for simplicity
-        # FastMCP will internally handle the required parameters
-        mcp_tool = Tool.from_function(
-            dynamic_tool, 
-            name=tool_name, 
-            description=description
-        )
-        
+
         # Get input schema for logging
         input_schema = tool_schema.get('inputSchema', {})
-        
         # Log registration details
-        logger.info(f"Registering dynamic tool {tool_name} with required parameters: {input_schema.get('required', [])}")
+        logger.info(f"Registering dynamic tool {tool_name} with required parameters: {input_schema.get('required', [])} and optional parameters: {input_schema.get('properties', {}).keys() - input_schema.get('required', [])}")
+                
+        func_arg_metadata = self.func_metadata(
+            dynamic_tool,
+            input_schema
+        )
+        # Register the tool with FastMCP
+        # since we are using a custom tool function, we need to manually create the Tool object
+        mcp_tool = Tool(
+            fn=dynamic_tool,
+            name=tool_name,
+            description=description,
+            parameters=input_schema,
+            fn_metadata=func_arg_metadata,
+            is_async=True,
+            context_kwarg="ctx",
+        )
+
         self.mcp._tool_manager._tools[tool_name] = mcp_tool
         
         # Store reference to the registered tool
