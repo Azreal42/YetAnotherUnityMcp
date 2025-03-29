@@ -314,9 +314,9 @@ namespace YetAnotherUnityMcp.Editor
             
             try
             {
+                connectedClients.Clear();
                 await MCPTcpServer.Instance.StopAsync("Server stopped by user");
                 lastResponse = "Server stopped";
-                connectedClients.Clear();
             }
             catch (Exception ex)
             {

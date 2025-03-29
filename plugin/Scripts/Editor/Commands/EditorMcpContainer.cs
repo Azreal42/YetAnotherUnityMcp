@@ -5,11 +5,14 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using System.CodeDom.Compiler;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEditorInternal;
 using UnityEditor;
 using Microsoft.CSharp;
 using Newtonsoft.Json;
 using YetAnotherUnityMcp.Editor.Models;
+using System.Collections;
 
 namespace YetAnotherUnityMcp.Editor.Commands
 {
@@ -169,118 +172,198 @@ namespace YetAnotherUnityMcp.Runtime
         
         #region Screenshots
         
+        // Screenshot state storage for async processing
+        private static Dictionary<string, Screenshot> screenshotRequests = new Dictionary<string, Screenshot>();
+        
+        // Class to hold screenshot processing state
+        private class Screenshot
+        {
+            public string ID { get; set; }
+            public int Width { get; set; }
+            public int Height { get; set; }
+            public int SuperSize { get; set; }
+            public bool IsComplete { get; set; }
+            public byte[] ImageData { get; set; }
+            public string Error { get; set; }
+        }
+        
         /// <summary>
         /// Take a screenshot of the currently active Editor view and return it as base64 encoded image
         /// </summary>
-        /// <param name="width">Width of the screenshot (only used for superSize calculation)</param>
-        /// <param name="height">Height of the screenshot (only used for superSize calculation)</param>
+        /// <param name="width">Width of the screenshot</param>
+        /// <param name="height">Height of the screenshot</param>
         /// <returns>MCP response with base64 encoded image</returns>
-        [MCPTool("take_screenshot", "Take a screenshot of the Unity Editor", "editor_take_screenshot(width=1920, height=1080, save_path=\"screenshot.png\")")]
-        public static string TakeScreenshot(
+        [MCPTool("take_screenshot", "Take a screenshot of the Unity Editor", "editor_take_screenshot(width=1920, height=1080)", RunInSeparateThread = true)]
+        public static MCPResponse TakeScreenshot(
             [MCPParameter("width", "Width of the screenshot", "number", false)] int width = 1920,
             [MCPParameter("height", "Height of the screenshot", "number", false)] int height = 1080)
-        {
-            string tempOutputPath = Path.Combine(Application.temporaryCachePath, "temp_screenshot_" + DateTime.Now.Ticks + ".jpg");
+        {   
             try
             {   
-                // Ensure the directory exists - but only if there's a directory to create
-                string directory = Path.GetDirectoryName(tempOutputPath);
-                if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-                
-                // Calculate superSize (Application.CaptureScreenshot supports superSize for higher resolution)
+                string screenshotId = Guid.NewGuid().ToString();
+                // Calculate superSize (ScreenCapture.CaptureScreenshot supports superSize for higher resolution)
                 // Default game view is typically around 1280x720, so calculate the multiplier
-                // to get the desired resolution
                 int superSize = 1;
-                
-                // Get the game view size
-                System.Type gameViewType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
-                EditorWindow gameView = EditorWindow.GetWindow(gameViewType);
-                
-                if (gameView != null)
+                if (width > 1280 || height > 720)
                 {
-                    // Get the game view size
-                    Rect gameViewRect = gameView.position;
-                    float gameViewWidth = gameViewRect.width;
-                    float gameViewHeight = gameViewRect.height;
-                    
-                    // Calculate the superSize based on the target resolution
-                    float widthRatio = width / gameViewWidth;
-                    float heightRatio = height / gameViewHeight;
-                    superSize = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(widthRatio, heightRatio)));
-                    
-                    // Cap the superSize at 8 (Unity's typical upper limit)
-                    superSize = Mathf.Min(8, superSize);
+                    superSize = Math.Max(width / 1280, height / 720);
                 }
                 
-                // Focus the game view before taking the screenshot
-                if (gameView != null)
-                {
-                    gameView.Focus();
-                }
-
-                // Take the screenshot directly to a texture
-                RenderTexture rt = new RenderTexture(width, height, 24);
-                RenderTexture.active = rt;
+                // Create a completion source for the coroutine to signal completion
+                var completionSource = new TaskCompletionSource<byte[]>();
                 
-                // Render the screenshot
-                if (gameView != null)
+                // Create screenshot state object to track progress
+                var screenshot = new Screenshot
                 {
-                    // Use reflection to call Repaint on the GameView
-                    MethodInfo repaintMethod = gameViewType.GetMethod("Repaint", 
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                    
-                    if (repaintMethod != null)
+                    ID = screenshotId,
+                    Width = width,
+                    Height = height,
+                    SuperSize = superSize,
+                    IsComplete = false
+                };
+                
+                // Store in dictionary for tracking
+                screenshotRequests[screenshotId] = screenshot;
+                
+                Debug.Log($"Starting screenshot capture with ID {screenshotId}");
+                
+                // Start the coroutine on the main thread to capture screenshot
+                EditorCoroutine.Start(TakeScreenshotCoroutine(screenshot, completionSource));
+                
+                // Wait for the task to complete with timeout
+                Task<byte[]> task = completionSource.Task;
+                bool completed = false;
+                byte[] fileBytes = null;
+                
+                try
+                {
+                    // Wait with 10 second timeout
+                    if (task.Wait(10000))
                     {
-                        repaintMethod.Invoke(gameView, null);
+                        fileBytes = task.Result;
+                        completed = true;
+                    }
+                }
+                catch (AggregateException ex)
+                {
+                    // Unwrap the inner exception
+                    Debug.LogError($"Error in screenshot task: {ex.InnerException?.Message}");
+                    return MCPResponse.CreateErrorResponse($"Error taking screenshot: {ex.InnerException?.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error waiting for screenshot: {ex.Message}");
+                    return MCPResponse.CreateErrorResponse($"Error waiting for screenshot: {ex.Message}");
+                }
+                finally
+                {
+                    // Make sure we remove from the dictionary
+                    if (screenshotRequests.ContainsKey(screenshotId))
+                    {
+                        screenshotRequests.Remove(screenshotId);
                     }
                 }
                 
-                // Create a texture and read the screen pixels
-                Texture2D screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
-                screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                screenShot.Apply();
+                // Check if the task completed
+                if (!completed)
+                {
+                    Debug.LogError($"Screenshot task timed out after 10 seconds");
+                    return MCPResponse.CreateErrorResponse("Screenshot task timed out after 10 seconds");
+                }
                 
-                // Convert to JPG
-                byte[] bytes = screenShot.EncodeToJPG(90);
+                // Convert to base64
+                string base64 = Convert.ToBase64String(fileBytes);
                 
-                // Convert to base64 for direct return
-                string base64 = Convert.ToBase64String(bytes);
-                
-                // Cleanup
-                RenderTexture.active = null;
-                GameObject.DestroyImmediate(screenShot);
-                
-                // Create and return the MCP response using the helper method
+                // Create and return the MCP response
                 MCPResponse response = MCPResponse.CreateBase64ImageResponse(
                     base64, 
-                    "image/jpeg",
+                    "image/png",
                     $"Screenshot captured with dimensions {width}x{height}"
                 );
                 
-                return JsonConvert.SerializeObject(response, Formatting.Indented);
+                return response;
             }
             catch (Exception ex)
             {
                 // Return error response using the helper method
-                MCPResponse errorResponse = MCPResponse.CreateErrorResponse($"Error taking screenshot: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                return JsonConvert.SerializeObject(errorResponse, Formatting.Indented);
+                return MCPResponse.CreateErrorResponse($"Error taking screenshot: {ex.Message}\nStackTrace: {ex.StackTrace}");
             }
-            finally
+        }
+        
+        /// <summary>
+        /// Coroutine to take a screenshot on the main thread and handle file waiting
+        /// </summary>
+        private static IEnumerator TakeScreenshotCoroutine(Screenshot screenshot, TaskCompletionSource<byte[]> completionSource)
+        {
+            Debug.Log($"TakeScreenshotCoroutine: Taking screenshot with ID {screenshot.ID}");
+            
+            // Take the screenshot on the main thread
+            SceneView sceneView = SceneView.lastActiveSceneView;
+            if (sceneView == null) {
+                Debug.LogError("No SceneView available to capture.");
+                yield break;
+            }
+            EditorWindow sceneWindow = sceneView;  // SceneView inherits EditorWindow
+
+            // Optionally ensure the scene view is focused (to bring it to front)
+            sceneWindow.Focus();
+
+            // Get window position and size in screen coordinates
+            Rect windowRect = sceneWindow.position;
+            Vector2 screenPos = windowRect.position;
+            int width = (int)windowRect.width;
+            int height = (int)windowRect.height;
+
+            // Read the screen pixels from that region
+            Color[] pixels = InternalEditorUtility.ReadScreenPixel(screenPos, width, height);
+            // Copy into a Texture2D and encode to PNG
+            Texture2D tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+            tex.SetPixels(pixels);
+            tex.Apply();
+            byte[] pngData = tex.EncodeToPNG();
+            UnityEngine.Object.DestroyImmediate(tex);
+            
+            completionSource.SetResult(pngData);
+            
+            Debug.Log($"TakeScreenshotCoroutine: Screenshot with ID {screenshot.ID} completed successfully");
+            yield break;
+        }
+        
+        
+        /// <summary>
+        /// Simple coroutine runner for Unity Editor
+        /// </summary>
+        private class EditorCoroutine
+        {
+            public static EditorCoroutine Start(IEnumerator routine)
             {
-                // Cleanup: delete the temporary file if it exists
-                if (File.Exists(tempOutputPath))
+                EditorCoroutine coroutine = new EditorCoroutine(routine);
+                coroutine.Start();
+                return coroutine;
+            }
+            
+            private readonly IEnumerator routine;
+            
+            private EditorCoroutine(IEnumerator routine)
+            {
+                this.routine = routine;
+            }
+            
+            private void Start()
+            {
+                EditorApplication.update += Update;
+            }
+            
+            private void Stop()
+            {
+                EditorApplication.update -= Update;
+            }
+            
+            private void Update()
+            {
+                if (!routine.MoveNext())
                 {
-                    try
-                    {
-                        File.Delete(tempOutputPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"Failed to delete temporary screenshot file: {ex.Message}");
-                    }
+                    Stop();
                 }
             }
         }

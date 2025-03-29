@@ -68,17 +68,24 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// Example usage of the tool
         /// </summary>
         public string Example { get; set; }
-        
+
+        /// <summary>
+        /// Whether the tool should run in a separate thread
+        /// </summary>
+        public bool RunInSeparateThread { get; set; } = false;
+
         /// <summary>
         /// Create a new MCP tool attribute
         /// </summary>
         /// <param name="name">Name of the tool. If null, will be inferred from the method name.</param>
         /// <param name="description">Description of the tool</param>
         /// <param name="example">Example usage of the tool</param>
-        public MCPToolAttribute(string name = null, string description = null, string example = null) : base(description)
+        public MCPToolAttribute(string name = null, string description = null, string example = null, bool runInSeparateThread = false) 
+            : base(description)
         {
             Name = name;
             Example = example;
+            RunInSeparateThread = runInSeparateThread;
         }
     }
     

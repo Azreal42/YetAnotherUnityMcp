@@ -129,7 +129,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             registry.RegisterMethodsFromContainer(typeof(MockContainer));
 
             // Act
-            var result = ToolInvoker.InvokeTool("test_container_container_tool", null);
+            var toolDescriptor = registry.GetToolByName("test_container_container_tool");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
+            var result = ToolInvoker.InvokeTool(toolDescriptor, null);
 
             // Assert
             Assert.IsNotNull(result);
@@ -148,7 +150,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             };
 
             // Act
-            var result = ToolInvoker.InvokeTool("test_container_container_tool_with_params", parameters);
+            var toolDescriptor = registry.GetToolByName("test_container_container_tool_with_params");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
+            var result = ToolInvoker.InvokeTool(toolDescriptor, parameters);
 
             // Assert
             Assert.IsNotNull(result);
@@ -184,10 +188,12 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 { "param1", "test_value" }
                 // param2 is missing
             };
+            var toolDescriptor = registry.GetToolByName("test_container_container_tool_with_params");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
 
             // Act & Assert
             Assert.Throws<ArgumentException>(() => 
-                ToolInvoker.InvokeTool("test_container_container_tool_with_params", parameters)
+                ToolInvoker.InvokeTool(toolDescriptor, parameters)
             );
         }
     }

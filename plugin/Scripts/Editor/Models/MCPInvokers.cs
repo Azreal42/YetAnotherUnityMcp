@@ -110,106 +110,14 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             var args = new object[methodParams.Length];
             
-            // Check for args/kwargs pattern
-            bool hasArgs = parameters.TryGetValue("args", out object argsValue);
-            bool hasKwargs = parameters.TryGetValue("kwargs", out object kwargsValue);
-            
-            // If using args/kwargs pattern, build a new parameters dictionary from it
             Dictionary<string, object> effectiveParams = parameters;
             
-            if (hasArgs || hasKwargs)
-            {
-                Debug.Log($"[MapParameters] Using args/kwargs pattern");
-                effectiveParams = new Dictionary<string, object>();
-                
-                // Process positional args first
-                if (hasArgs)
-                {
-                    // Handle positional args
-                    List<object> positionalArgs = new List<object>();
-                    
-                    // Handle different types of args value
-                    if (argsValue is string argsStr)
-                    {
-                        // Single arg as string (common case)
-                        positionalArgs.Add(argsStr);
-                        Debug.Log($"[MapParameters] Single arg as string: '{argsStr}'");
-                    }
-                    else if (argsValue is Newtonsoft.Json.Linq.JArray jArray)
-                    {
-                        // Array of args
-                        foreach (var item in jArray)
-                        {
-                            positionalArgs.Add(item.ToObject<object>());
-                        }
-                        Debug.Log($"[MapParameters] JArray args with {positionalArgs.Count} items");
-                    }
-                    else if (argsValue is Newtonsoft.Json.Linq.JValue jValue)
-                    {
-                        // Handle JValue specifically
-                        positionalArgs.Add(jValue.Value);
-                        Debug.Log($"[MapParameters] JValue arg: {jValue.Value}");
-                    }
-                    else if (argsValue is Newtonsoft.Json.Linq.JToken jToken)
-                    {
-                        // Handle other JToken types
-                        positionalArgs.Add(jToken.ToObject<object>());
-                        Debug.Log($"[MapParameters] JToken arg: {jToken}");
-                    }
-                    else if (argsValue != null)
-                    {
-                        // Any other non-null type
-                        positionalArgs.Add(argsValue);
-                        Debug.Log($"[MapParameters] Other arg type: {argsValue.GetType().Name}");
-                    }
-                    
-                    // Map positional args to method parameters in order
-                    if (positionalArgs.Count > 0)
-                    {
-                        for (int i = 0; i < Math.Min(positionalArgs.Count, methodParams.Length); i++)
-                        {
-                            string paramName = methodParams[i].Name;
-                            object argValue = positionalArgs[i];
-                            
-                            Debug.Log($"[MapParameters] Mapping arg[{i}] to param '{paramName}': {argValue}");
-                            effectiveParams[paramName] = argValue;
-                        }
-                    }
-                }
-                
-                // Process keyword args next (these will override positional args if there are conflicts)
-                if (hasKwargs)
-                {
-                    Dictionary<string, object> keywordArgs = new Dictionary<string, object>();
-                    
-                    if (kwargsValue is Newtonsoft.Json.Linq.JObject jObject)
-                    {
-                        // Convert JObject to Dictionary
-                        keywordArgs = jObject.ToObject<Dictionary<string, object>>();
-                        Debug.Log($"[MapParameters] Mapped JObject kwargs with {keywordArgs.Count} entries");
-                    }
-                    else if (kwargsValue is Dictionary<string, object> dict)
-                    {
-                        // Already a Dictionary
-                        keywordArgs = dict;
-                        Debug.Log($"[MapParameters] Using Dictionary kwargs with {keywordArgs.Count} entries");
-                    }
-                    
-                    // Add keyword args to effective parameters (overriding positional args)
-                    foreach (var kvp in keywordArgs)
-                    {
-                        effectiveParams[kvp.Key] = kvp.Value;
-                    }
-                }
-            }
-            
-            // Now map parameters using the effective parameters (either original or from args/kwargs)
             for (int i = 0; i < methodParams.Length; i++)
             {
                 var paramInfo = methodParams[i];
                 string paramName = paramInfo.Name;
                 
-                if (effectiveParams.TryGetValue(paramName, out object paramValue))
+                if (effectiveParams.TryGetValue(paramName, out object paramValue) && paramValue != null)
                 {
                     // Handle JObject conversion first
                     if (paramValue is Newtonsoft.Json.Linq.JObject jObject)
@@ -251,10 +159,13 @@ namespace YetAnotherUnityMcp.Editor.Models
                         args[i] = paramValue;
                     }
                 }
-                else if (paramInfo.HasDefaultValue)
+                else if (paramInfo.HasDefaultValue && paramValue == null)
                 {
-                    // Use default value
                     args[i] = paramInfo.DefaultValue;
+                }
+                else if (paramValue == null)
+                {
+                    args[i] = null;
                 }
                 else
                 {
@@ -279,13 +190,8 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <param name="parameters">Parameters for the tool</param>
         /// <returns>Result of the tool invocation</returns>
         /// <exception cref="ArgumentException">Thrown if tool not found or parameters invalid</exception>
-        public static object InvokeTool(string toolName, Dictionary<string, object> parameters)
-        {
-            if (string.IsNullOrEmpty(toolName))
-            {
-                throw new ArgumentException("Tool name cannot be null or empty");
-            }
-            
+        public static object InvokeTool(ToolDescriptor toolDescriptor, Dictionary<string, object> parameters)
+        {            
             // Create a new dictionary to ensure we're working with a proper Dictionary<string, object>
             Dictionary<string, object> processedParams = new Dictionary<string, object>();
             
@@ -324,24 +230,13 @@ namespace YetAnotherUnityMcp.Editor.Models
                 processedParams = new Dictionary<string, object>();
             }
             
-            Debug.Log($"[ToolInvoker] Invoking tool: {toolName} with parameters: {JsonConvert.SerializeObject(processedParams)}");
-            
-            // Find the tool in the registry
-            var registry = MCPRegistry.Instance;
-            var toolDescriptor = registry.GetToolByName(toolName);
-            
-            if (toolDescriptor == null)
-            {
-                throw new ArgumentException($"Tool not found in registry: {toolName}");
-            }
-            
             // Check if this is a method-based tool
             if (toolDescriptor.MethodInfo == null || toolDescriptor.ContainerType == null)
             {
-                throw new ArgumentException($"Tool {toolName} is not a method-based tool");
+                throw new ArgumentException($"Tool {toolDescriptor.Name} is not a method-based tool");
             }
 
-            Debug.Log($"[ToolInvoker] Using container method for tool: {toolName}");
+            Debug.Log($"[ToolInvoker] Using container method for tool: {toolDescriptor.Name}");
             
             // Get the method info
             var methodInfo = toolDescriptor.MethodInfo;
@@ -355,7 +250,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             // Invoke the method
             Debug.Log($"[ToolInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
             object result = methodInfo.Invoke(null, containerArgs);
-            Debug.Log($"[ToolInvoker] Tool {toolName} invoked successfully");
+            Debug.Log($"[ToolInvoker] Tool {toolDescriptor.Name} invoked successfully");
             
             return result;
         }

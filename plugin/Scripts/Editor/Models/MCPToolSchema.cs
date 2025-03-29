@@ -334,6 +334,12 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// </summary>
         [JsonIgnore]
         public Type ContainerType { get; set; }
+
+        /// <summary>
+        /// Whether the tool should run in a separate thread
+        /// </summary>
+        [JsonIgnore]
+        public bool RunInSeparateThread { get; set; } = false;
     }
     
     /// <summary>

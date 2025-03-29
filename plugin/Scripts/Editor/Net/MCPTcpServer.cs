@@ -114,7 +114,6 @@ namespace YetAnotherUnityMcp.Editor.Net
         public async Task StopAsync(string reason = null)
         {
             await _server.StopAsync(reason);
-            _activeClients.Clear();
         }
         
         /// <summary>
@@ -153,6 +152,7 @@ namespace YetAnotherUnityMcp.Editor.Net
         private void HandleServerStopped()
         {
             Debug.Log("[MCP TCP Server] Stopped");
+             _activeClients.Clear();
             OnServerStopped?.Invoke();
         }
         
@@ -252,7 +252,58 @@ namespace YetAnotherUnityMcp.Editor.Net
         /// </summary>
         private async void ProcessCommandRequest(string clientId, string requestId, string command, Dictionary<string, object> request)
         {
-            // Extract parameters
+            try
+            {
+                // Use the performance monitor to track execution time
+                using (var timer = CommandExecutionMonitor.Instance.StartOperation($"Command_{command}"))
+                {
+                    // Track the start time for our own logging
+                    long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    Debug.Log($"[MCP Server] Executing command: {command}");
+                    
+                    // Process different commands
+                    switch (command)
+                    {
+                        case "get_schema":
+                            await ExecuteGetSchema(clientId, requestId, request);
+                            break;
+                            
+                        case "access_resource":
+                            await ExecuteGetResource(clientId, requestId, request);
+                            break;
+                         
+                        default:
+                           await ExecuteTool(clientId, requestId, request, command);
+                           break;
+                    }
+                    
+                    // Log completion time for long-running commands
+                    long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    long elapsed = endTime - startTime;
+                    
+                    if (elapsed > 100)
+                    {
+                        Debug.Log($"[MCP Server] Completed command: {command} in {elapsed}ms");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var error = $"Error executing command {command}: {ex.Message}";
+                Debug.LogError($"[MCP TCP Server] {error}");
+            }             
+        }
+
+        private async Task ExecuteGetSchema(string clientId, string requestId, Dictionary<string, object> request)
+        {
+            string error = null;
+            var result = MCPRegistry.Instance.GetSchemaAsJson();
+            await SendResponse(clientId, requestId, request, error, result);
+        }
+
+
+        private Dictionary<string, object> ExtractParameters(Dictionary<string, object> request)
+        {
             Dictionary<string, object> parameters = null;
             if (request.TryGetValue("parameters", out object paramsObj))
             {
@@ -272,226 +323,233 @@ namespace YetAnotherUnityMcp.Editor.Net
                     Debug.LogError($"[MCP TCP Server] Invalid parameters type: {paramsObj.GetType()}");
                 }
             }
-            
-            // Execute the command
+
+            return parameters;
+        }
+
+
+        private async Task ExecuteGetResource(string clientId, string requestId, Dictionary<string, object> request)
+        {
             object result = null;
             string error = null;
+
+            var parameters = ExtractParameters(request);
+
+            if (!(parameters?.TryGetValue("resource_name", out object resourceNameObj) == true && 
+                resourceNameObj is string resourceName))
+            {
+                error = "Missing or invalid 'resource_name' parameter";
+                await SendResponse(clientId, requestId, request, error, null);
+                return;
+            }
+
+            var registry = MCPRegistry.Instance;
+
+            var ressourceDescriptor = registry.GetToolByName(resourceName);
+            Debug.Log($"[MCP TCP Server] Accessing resource {ressourceDescriptor.Name} with parameters: {JsonConvert.SerializeObject(parameters)}");
+            
+            Dictionary<string, object> resourceParams = new Dictionary<string, object>();
+            
+            if (parameters?.TryGetValue("parameters", out object resourceParamsObj) == true)
+            {
+                if (resourceParamsObj is Dictionary<string, object> resourceParamsDict)
+                {
+                    resourceParams = resourceParamsDict;
+                }
+                else if (resourceParamsObj is Newtonsoft.Json.Linq.JObject jObject)
+                {
+                    // Convert JObject to Dictionary<string, object>
+                    resourceParams = jObject.ToObject<Dictionary<string, object>>();
+                    Debug.Log($"[MCP TCP Server] Converted JObject resource parameters to Dictionary");
+                }
+                else
+                {
+                    Debug.LogError($"[MCP TCP Server] Invalid resource parameters type: {resourceParamsObj.GetType()}");
+                    resourceParams = new Dictionary<string, object>();
+                }
+            }
             
             try
             {
-                // Use the performance monitor to track execution time
-                using (var timer = CommandExecutionMonitor.Instance.StartOperation($"Command_{command}"))
-                {
-                    // Track the start time for our own logging
-                    long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    Debug.Log($"[MCP Server] Executing command: {command}");
-                    
-                    // Process different commands
-                    switch (command)
-                    {
-                        
-                        case "get_schema":
-                            result = MCPRegistry.Instance.GetSchemaAsJson();
-                            break;
-                            
-                        case "access_resource":
-                            Debug.Log($"[MCP TCP Server] Accessing resource with parameters: {JsonConvert.SerializeObject(parameters)}");
-
-                            // Invoke a resource using the ResourceInvoker
-                            if (parameters?.TryGetValue("resource_name", out object resourceNameObj) == true && 
-                                resourceNameObj is string resourceName)
-                            {
-                                Debug.Log($"[MCP TCP Server] Resource name: {resourceName}");
-                                // Get the resource parameters
-                                Dictionary<string, object> resourceParams = null;
-                                
-                                if (parameters?.TryGetValue("parameters", out object resourceParamsObj) == true)
-                                {
-                                    if (resourceParamsObj is Dictionary<string, object> resourceParamsDict)
-                                    {
-                                        resourceParams = resourceParamsDict;
-                                    }
-                                    else if (resourceParamsObj is Newtonsoft.Json.Linq.JObject jObject)
-                                    {
-                                        // Convert JObject to Dictionary<string, object>
-                                        resourceParams = jObject.ToObject<Dictionary<string, object>>();
-                                        Debug.Log($"[MCP TCP Server] Converted JObject resource parameters to Dictionary");
-                                    }
-                                    else
-                                    {
-                                        Debug.LogError($"[MCP TCP Server] Invalid resource parameters type: {resourceParamsObj.GetType()}");
-                                        resourceParams = new Dictionary<string, object>();
-                                    }
-                                }
-                                else
-                                {
-                                    resourceParams = new Dictionary<string, object>();
-                                }
-                                
-                                try
-                                {
-                                    // Use the ResourceInvoker to invoke the resource
-                                    result = ResourceInvoker.InvokeResource(resourceName, resourceParams);
-                                    Debug.Log($"[MCP TCP Server] Resource {resourceName} accessed successfully");
-                                }
-                                catch (Exception ex)
-                                {
-                                    error = ex.Message;
-                                    Debug.LogError($"[MCP TCP Server] Error accessing resource {resourceName}: {ex.Message}\n{ex.StackTrace}");
-                                }
-                            }
-                            else
-                            {
-                                error = "Missing or invalid 'resource_name' parameter";
-                            }
-                            break;
-                         
-                        default:
-                            Debug.Log($"[MCP TCP Server] Invoking tool {command} with parameters: {JsonConvert.SerializeObject(parameters)}");
-                            var toolName = command;
-                            Dictionary<string, object> toolParams = new Dictionary<string, object>();
-                            
-                            // Check for direct parameters in the request
-                            if (parameters != null)
-                            {
-                                // First, check for args/kwargs pattern (directly in parameters)
-                                // Copy args/kwargs to tool parameters if they exist
-                                bool hasArgsKwargs = false;
-                                
-                                if (parameters.TryGetValue("args", out object argsObj))
-                                {
-                                    hasArgsKwargs = true;
-                                    Debug.Log($"[MCP TCP Server] Found args parameter type: {argsObj?.GetType().Name ?? "null"}");
-                                    toolParams["args"] = argsObj;
-                                    
-                                    // Handle string special case (for "args":"value" format)
-                                    if (argsObj is string argsStr)
-                                    {
-                                        Debug.Log($"[MCP TCP Server] Args is string: '{argsStr}'");
-                                    }
-                                    // For JSON array format, properly convert
-                                    else if (argsObj is Newtonsoft.Json.Linq.JArray jArray)
-                                    {
-                                        Debug.Log($"[MCP TCP Server] Args is JArray with {jArray.Count} items");
-                                        string argsJson = jArray.ToString(Newtonsoft.Json.Formatting.None);
-                                        Debug.Log($"[MCP TCP Server] Args JSON: {argsJson}");
-                                    }
-                                }
-                                
-                                if (parameters.TryGetValue("kwargs", out object kwargsObj))
-                                {
-                                    hasArgsKwargs = true;
-                                    Debug.Log($"[MCP TCP Server] Found kwargs parameter type: {kwargsObj?.GetType().Name ?? "null"}");
-                                    toolParams["kwargs"] = kwargsObj;
-                                    
-                                    // For JSON object format, properly convert
-                                    if (kwargsObj is Newtonsoft.Json.Linq.JObject jObject)
-                                    {
-                                        Debug.Log($"[MCP TCP Server] Kwargs is JObject");
-                                        string kwargsJson = jObject.ToString(Newtonsoft.Json.Formatting.None);
-                                        Debug.Log($"[MCP TCP Server] Kwargs JSON: {kwargsJson}");
-                                    }
-                                }
-                                
-                                // Check for nested parameters object
-                                if (parameters.TryGetValue("parameters", out object toolParamsObj))
-                                {
-                                    if (toolParamsObj is Dictionary<string, object> toolParamsDict)
-                                    {
-                                        // If not using args/kwargs pattern, use the parameters directly
-                                        if (!hasArgsKwargs)
-                                        {
-                                            toolParams = toolParamsDict;
-                                        }
-                                        // Otherwise add these as additional named parameters
-                                        else
-                                        {
-                                            foreach (var kvp in toolParamsDict)
-                                            {
-                                                toolParams[kvp.Key] = kvp.Value;
-                                            }
-                                        }
-                                    }
-                                    else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
-                                    {
-                                        // Convert JObject to Dictionary<string, object>
-                                        var convertedParams = jObject.ToObject<Dictionary<string, object>>();
-                                        Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
-                                        
-                                        // If not using args/kwargs pattern, use the parameters directly
-                                        if (!hasArgsKwargs)
-                                        {
-                                            toolParams = convertedParams;
-                                        }
-                                        // Otherwise add these as additional named parameters
-                                        else
-                                        {
-                                            foreach (var kvp in convertedParams)
-                                            {
-                                                toolParams[kvp.Key] = kvp.Value;
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
-                                    }
-                                }
-                                
-                                // Check if we should use the parameters themselves as named parameters
-                                // This is the key part that fixes the direct {"code": "..."} format
-                                else if (!hasArgsKwargs)
-                                {
-                                    // Copy all parameters except special ones as named parameters
-                                    foreach (var kvp in parameters)
-                                    {
-                                        // Skip internal parameters like "client_timestamp" that aren't actual tool parameters
-                                        if (kvp.Key != "client_timestamp" && kvp.Key != "request_id")
-                                        {
-                                            toolParams[kvp.Key] = kvp.Value;
-                                        }
-                                    }
-                                    
-                                    // Log what we're using, for debugging
-                                    Debug.Log($"[MCP TCP Server] Using parameters directly as named parameters: {JsonConvert.SerializeObject(toolParams)}");
-                                }
-                            }
-                            
-                            else
-                            {
-                                toolParams = new Dictionary<string, object>();
-                            }
-                            
-                            try
-                            {
-                                // Use the ToolInvoker to invoke the tool
-                                result = ToolInvoker.InvokeTool(toolName, toolParams);
-                                Debug.Log($"[MCP TCP Server] Tool {toolName} invoked successfully");
-                            }
-                            catch (Exception ex)
-                            {
-                                error = ex.Message;
-                                Debug.LogError($"[MCP TCP Server] Error invoking tool {toolName}: {ex.Message}\n{ex.StackTrace}");
-                            }
-                            break;
-                    }
-                    
-                    // Log completion time for long-running commands
-                    long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    long elapsed = endTime - startTime;
-                    
-                    if (elapsed > 100)
-                    {
-                        Debug.Log($"[MCP Server] Completed command: {command} in {elapsed}ms");
-                    }
-                }
+                // Use the ResourceInvoker to invoke the resource
+                result = ResourceInvoker.InvokeResource(ressourceDescriptor.Name, resourceParams);
+                Debug.Log($"[MCP TCP Server] Resource {ressourceDescriptor.Name} accessed successfully");
             }
             catch (Exception ex)
             {
-                error = $"Error executing command {command}: {ex.Message}";
-                Debug.LogError($"[MCP TCP Server] {error}");
+                error = ex.Message;
+                Debug.LogError($"[MCP TCP Server] Error accessing resource {ressourceDescriptor.Name}: {ex.Message}\n{ex.StackTrace}");
+            }
+        
+
+            await SendResponse(clientId, requestId, request, error, result);
+        }
+
+
+        private async Task ExecuteTool(string clientId, string requestId, Dictionary<string, object> request, string command)
+        {
+            object result = null;
+            string error = null;
+
+            var parameters = ExtractParameters(request);
+            var registry = MCPRegistry.Instance;
+
+            var toolDescriptor = registry.GetToolByName(command);
+            if (toolDescriptor == null)
+            {
+                error = $"Resource '{command}' not found in registry";
+                await SendResponse(clientId, requestId, request, error, null);
+                return;
+            }
+
+            Debug.Log($"[MCP TCP Server] Invoking tool {command} (UseUIThread : {!toolDescriptor.RunInSeparateThread}) with parameters: {JsonConvert.SerializeObject(parameters)}");
+
+            if (toolDescriptor.RunInSeparateThread)
+            {
+                // Run the resource access in a separate thread to avoid blocking the main thread (do not await here)
+                Task.Run(() => ExecuteToolImpl(clientId, requestId, request, parameters, toolDescriptor).Wait());
+            }
+            else
+            {
+                await ExecuteToolImpl(clientId, requestId, request, parameters, toolDescriptor).ConfigureAwait(false);
+            }
+        }
+
+
+        private async Task ExecuteToolImpl(string clientId, string requestId, Dictionary<string, object> request, Dictionary<string, object> parameters, ToolDescriptor toolDescriptor)
+        {
+            object result = null;
+            string error = null;
+            
+            Dictionary<string, object> toolParams = new Dictionary<string, object>();
+            
+            // Check for direct parameters in the request
+            if (parameters != null)
+            {
+                // First, check for args/kwargs pattern (directly in parameters)
+                // Copy args/kwargs to tool parameters if they exist
+                bool hasArgsKwargs = false;
+                
+                if (parameters.TryGetValue("args", out object argsObj))
+                {
+                    hasArgsKwargs = true;
+                    Debug.Log($"[MCP TCP Server] Found args parameter type: {argsObj?.GetType().Name ?? "null"}");
+                    toolParams["args"] = argsObj;
+                    
+                    // Handle string special case (for "args":"value" format)
+                    if (argsObj is string argsStr)
+                    {
+                        Debug.Log($"[MCP TCP Server] Args is string: '{argsStr}'");
+                    }
+                    // For JSON array format, properly convert
+                    else if (argsObj is Newtonsoft.Json.Linq.JArray jArray)
+                    {
+                        Debug.Log($"[MCP TCP Server] Args is JArray with {jArray.Count} items");
+                        string argsJson = jArray.ToString(Newtonsoft.Json.Formatting.None);
+                        Debug.Log($"[MCP TCP Server] Args JSON: {argsJson}");
+                    }
+                }
+                
+                if (parameters.TryGetValue("kwargs", out object kwargsObj))
+                {
+                    hasArgsKwargs = true;
+                    Debug.Log($"[MCP TCP Server] Found kwargs parameter type: {kwargsObj?.GetType().Name ?? "null"}");
+                    toolParams["kwargs"] = kwargsObj;
+                    
+                    // For JSON object format, properly convert
+                    if (kwargsObj is Newtonsoft.Json.Linq.JObject jObject)
+                    {
+                        Debug.Log($"[MCP TCP Server] Kwargs is JObject");
+                        string kwargsJson = jObject.ToString(Newtonsoft.Json.Formatting.None);
+                        Debug.Log($"[MCP TCP Server] Kwargs JSON: {kwargsJson}");
+                    }
+                }
+                
+                // Check for nested parameters object
+                if (parameters.TryGetValue("parameters", out object toolParamsObj))
+                {
+                    if (toolParamsObj is Dictionary<string, object> toolParamsDict)
+                    {
+                        // If not using args/kwargs pattern, use the parameters directly
+                        if (!hasArgsKwargs)
+                        {
+                            toolParams = toolParamsDict;
+                        }
+                        // Otherwise add these as additional named parameters
+                        else
+                        {
+                            foreach (var kvp in toolParamsDict)
+                            {
+                                toolParams[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                    else if (toolParamsObj is Newtonsoft.Json.Linq.JObject jObject)
+                    {
+                        // Convert JObject to Dictionary<string, object>
+                        var convertedParams = jObject.ToObject<Dictionary<string, object>>();
+                        Debug.Log($"[MCP TCP Server] Converted JObject tool parameters to Dictionary");
+                        
+                        // If not using args/kwargs pattern, use the parameters directly
+                        if (!hasArgsKwargs)
+                        {
+                            toolParams = convertedParams;
+                        }
+                        // Otherwise add these as additional named parameters
+                        else
+                        {
+                            foreach (var kvp in convertedParams)
+                            {
+                                toolParams[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"[MCP TCP Server] Invalid tool parameters type: {toolParamsObj.GetType()}");
+                    }
+                }
+                
+                // Check if we should use the parameters themselves as named parameters
+                // This is the key part that fixes the direct {"code": "..."} format
+                else if (!hasArgsKwargs)
+                {
+                    // Copy all parameters except special ones as named parameters
+                    foreach (var kvp in parameters)
+                    {
+                        // Skip internal parameters like "client_timestamp" that aren't actual tool parameters
+                        if (kvp.Key != "client_timestamp" && kvp.Key != "request_id")
+                        {
+                            toolParams[kvp.Key] = kvp.Value;
+                        }
+                    }
+                    
+                    // Log what we're using, for debugging
+                    Debug.Log($"[MCP TCP Server] Using parameters directly as named parameters: {JsonConvert.SerializeObject(toolParams)}");
+                }
             }
             
+            else
+            {
+                toolParams = new Dictionary<string, object>();
+            }
+            
+            try
+            {
+                // Use the ToolInvoker to invoke the tool
+                result = ToolInvoker.InvokeTool(toolDescriptor, toolParams);
+                Debug.Log($"[MCP TCP Server] Tool {toolDescriptor.Name} invoked successfully");
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Debug.LogError($"[MCP TCP Server] Error invoking tool {toolDescriptor.Name}: {ex.Message}\n{ex.StackTrace}");
+            }
+            await SendResponse(clientId, requestId, request, error, result);
+        }
+
+        private async Task SendResponse(string clientId, string requestId, Dictionary<string, object> request, string error, object result)
+        {
             // Send the response
             try
             {

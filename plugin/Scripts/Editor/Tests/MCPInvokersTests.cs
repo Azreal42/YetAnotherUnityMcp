@@ -259,8 +259,12 @@ namespace YetAnotherUnityMcp.Editor.Tests
         [Test]
         public void ToolInvoker_WithSimpleTool_ReturnsResult()
         {
+            // Arrange
+            var registry = MCPRegistry.Instance;
+            var toolDescriptor = registry.GetToolByName("test_tool");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
             // Act
-            var result = ToolInvoker.InvokeTool("test_tool", null);
+            var result = ToolInvoker.InvokeTool(toolDescriptor, null);
             
             // Assert
             Assert.IsNotNull(result);
@@ -279,9 +283,12 @@ namespace YetAnotherUnityMcp.Editor.Tests
                 { "param1", "test_value" },
                 { "param2", 42 }
             };
+            var registry = MCPRegistry.Instance;
+            var toolDescriptor = registry.GetToolByName("test_tool_with_params");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
             
             // Act
-            var result = ToolInvoker.InvokeTool("test_tool_with_params", parameters);
+            var result = ToolInvoker.InvokeTool(toolDescriptor, parameters);
             
             // Assert
             Assert.IsNotNull(result);
@@ -302,9 +309,13 @@ namespace YetAnotherUnityMcp.Editor.Tests
             
             // Log the parsed parameters to see what's actually in there
             Debug.Log($"Parameters after parsing: {JsonConvert.SerializeObject(parameters)}");
+
+            var registry = MCPRegistry.Instance;
+            var toolDescriptor = registry.GetToolByName("test_execute_code");
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
             
             // Act
-            var result = ToolInvoker.InvokeTool("test_execute_code", parameters);
+            var result = ToolInvoker.InvokeTool(toolDescriptor, parameters);
             
             // Assert
             Assert.IsNotNull(result);
@@ -349,12 +360,17 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Log what we actually received
             Debug.Log($"Parameters object type: {parametersObj.GetType().FullName}");
             
+            var registry = MCPRegistry.Instance;
+            var toolDescriptor = registry.GetToolByName(request["command"].ToString());
+            Assert.IsNotNull(toolDescriptor, "Tool descriptor should not be null");
+
             // Tests with both approaches
             if (parametersDirectCast != null)
             {
                 try
                 {
-                    var resultDirect = ToolInvoker.InvokeTool(request["command"].ToString(), parametersDirectCast);
+                   
+                    var resultDirect = ToolInvoker.InvokeTool(toolDescriptor, parametersDirectCast);
                     Debug.Log($"Direct cast worked! Result: {resultDirect}");
                     Assert.IsTrue(resultDirect.ToString().Contains("Hello from TCP test"), 
                         "Direct cast should work if fixed");
@@ -371,7 +387,7 @@ namespace YetAnotherUnityMcp.Editor.Tests
             {
                 try
                 {
-                    var resultJObject = ToolInvoker.InvokeTool(request["command"].ToString(), parametersJObjectConvert);
+                    var resultJObject = ToolInvoker.InvokeTool(toolDescriptor, parametersJObjectConvert);
                     Debug.Log($"JObject conversion worked! Result: {resultJObject}");
                     Assert.IsTrue(resultJObject.ToString().Contains("Hello from TCP test"), 
                         "JObject conversion should work");

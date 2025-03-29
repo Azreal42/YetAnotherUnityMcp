@@ -233,7 +233,8 @@ namespace YetAnotherUnityMcp.Editor.Models
                     InputSchema = MCPAttributeUtil.GetSchemaFromMethodParameters(method),
                     // OutputSchema removed in MCP specification compliance
                     MethodInfo = method,
-                    ContainerType = containerType
+                    ContainerType = containerType,
+                    RunInSeparateThread = toolAttr.RunInSeparateThread,
                 };
                 
                 RegisterTool(descriptor);

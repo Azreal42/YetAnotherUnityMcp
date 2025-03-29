@@ -947,7 +947,6 @@ namespace YetAnotherUnityMcp.Editor.Net
             frameBuffer[offset] = TcpServer.END_MARKER;
             
             // Log the frame details for debugging
-            Debug.Log($"[TCP Server] Sending framed message: STX + {messageBytes.Length} bytes + ETX (total frame size: {totalLength} bytes)");
             if (message.Length > 500)
             {
                 Debug.Log($"[TCP Server] Message content (truncated): {message.Substring(0, 100)}... (total: {message.Length} bytes)");
@@ -987,7 +986,7 @@ namespace YetAnotherUnityMcp.Editor.Net
             {
                 Debug.LogError($"[TCP Server] Error sending frame: {ex.Message}");
                 throw;
-            }
+            }   
         }
         
         /// <summary>
