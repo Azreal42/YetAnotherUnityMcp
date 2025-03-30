@@ -111,7 +111,6 @@ namespace YetAnotherUnityMcp.Editor.Containers
                     result.AppendLine("    {");
                     result.AppendLine($"      \"type\": \"{log.Type}\",");
                     result.AppendLine($"      \"message\": \"{EscapeJsonString(log.Message)}\",");
-                    result.AppendLine($"      \"stackTrace\": \"{EscapeJsonString(log.StackTrace)}\",");
                     result.AppendLine($"      \"timestamp\": \"{log.Timestamp:yyyy-MM-dd HH:mm:ss}\"");
                     
                     // If it's the last log, don't add a comma

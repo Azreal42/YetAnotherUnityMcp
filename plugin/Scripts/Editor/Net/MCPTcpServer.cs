@@ -254,38 +254,34 @@ namespace YetAnotherUnityMcp.Editor.Net
         {
             try
             {
-                // Use the performance monitor to track execution time
-                using (var timer = CommandExecutionMonitor.Instance.StartOperation($"Command_{command}"))
+                // Track the start time for our own logging
+                long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                
+                // Process different commands
+                switch (command)
                 {
-                    // Track the start time for our own logging
-                    long startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    Debug.Log($"[MCP Server] Executing command: {command}");
-                    
-                    // Process different commands
-                    switch (command)
-                    {
-                        case "get_schema":
-                            await ExecuteGetSchema(clientId, requestId, request);
-                            break;
-                            
-                        case "access_resource":
-                            await ExecuteGetResource(clientId, requestId, request);
-                            break;
-                         
-                        default:
-                           await ExecuteTool(clientId, requestId, request, command);
-                           break;
-                    }
-                    
-                    // Log completion time for long-running commands
-                    long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    long elapsed = endTime - startTime;
-                    
-                    if (elapsed > 100)
-                    {
-                        Debug.Log($"[MCP Server] Completed command: {command} in {elapsed}ms");
-                    }
+                    case "get_schema":
+                        await ExecuteGetSchema(clientId, requestId, request);
+                        break;
+                        
+                    case "access_resource":
+                        await ExecuteGetResource(clientId, requestId, request);
+                        break;
+                        
+                    default:
+                        await ExecuteTool(clientId, requestId, request, command);
+                        break;
                 }
+                
+                // Log completion time for long-running commands
+                long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                long elapsed = endTime - startTime;
+                
+                if (elapsed > 100)
+                {
+                    Debug.Log($"[MCP Server] Completed command: {command} in {elapsed}ms");
+                }
+                
             }
             catch (Exception ex)
             {
@@ -315,12 +311,10 @@ namespace YetAnotherUnityMcp.Editor.Net
                 {
                     // Convert JObject to Dictionary<string, object>
                     parameters = jObject.ToObject<Dictionary<string, object>>();
-                    Debug.Log($"[MCP TCP Server] Converted JObject parameters to Dictionary");
                 }
                 else
                 {
                     parameters = new Dictionary<string, object>();
-                    Debug.LogError($"[MCP TCP Server] Invalid parameters type: {paramsObj.GetType()}");
                 }
             }
 
@@ -523,9 +517,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                             toolParams[kvp.Key] = kvp.Value;
                         }
                     }
-                    
-                    // Log what we're using, for debugging
-                    Debug.Log($"[MCP TCP Server] Using parameters directly as named parameters: {JsonConvert.SerializeObject(toolParams)}");
                 }
             }
             
@@ -538,7 +529,6 @@ namespace YetAnotherUnityMcp.Editor.Net
             {
                 // Use the ToolInvoker to invoke the tool
                 result = ToolInvoker.InvokeTool(toolDescriptor, toolParams);
-                Debug.Log($"[MCP TCP Server] Tool {toolDescriptor.Name} invoked successfully");
             }
             catch (Exception ex)
             {

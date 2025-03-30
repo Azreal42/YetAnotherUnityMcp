@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
+using UnityEngine.AI;
 
 namespace YetAnotherUnityMcp.Editor.Net
 {
@@ -64,6 +65,8 @@ namespace YetAnotherUnityMcp.Editor.Net
         
         public void Process(TcpServer server)
         {
+             if (JsonContent == "PONG")
+                return;
             // Calculate latency if client timestamp is present
             if (ParsedContent.TryGetValue("client_timestamp", out var timestampObj) && timestampObj != null)
             {
@@ -95,6 +98,8 @@ namespace YetAnotherUnityMcp.Editor.Net
         
         private void LogMessageContent()
         {
+            if (JsonContent == "PONG")
+                return;
             // Log message content with length limit
             if (JsonContent.Length < 500)
             {

@@ -268,17 +268,6 @@ namespace YetAnotherUnityMcp.Editor.Net
             try
             {
                 await connection.SendAsync(message);
-                
-                // Log the message being sent
-                if (message.Length < 500) 
-                {
-                    _messageQueue.Enqueue(new TcpStatusMessage($"Message sent to {connectionId}: {message}"));
-                } 
-                else 
-                {
-                    _messageQueue.Enqueue(new TcpStatusMessage(
-                        $"Message sent to {connectionId}: {message.Substring(0, 100)}... (truncated, {message.Length} bytes)"));
-                }
             }
             catch (Exception ex)
             {
@@ -465,7 +454,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                 var stream = connection.Client.GetStream();
                 byte[] buffer = new byte[1024];
                 
-                Debug.Log("[TCP Server] Waiting for handshake request from client...");
                 
                 // Read initial handshake request with timeout
                 var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // Extended timeout
@@ -491,10 +479,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                         
                         // Convert current buffer to string and check for handshake
                         string currentMessage = Encoding.UTF8.GetString(buffer, 0, totalBytesRead);
-                        
-                        // Log progress
-                        Debug.Log($"[TCP Server] Read {bytesRead} bytes, total: {totalBytesRead}, current content: '{currentMessage}'");
-                        
+                    
                         // Check if the buffer contains the handshake request (with any whitespace/formatting differences)
                         if (currentMessage.Contains(HANDSHAKE_REQUEST))
                         {
@@ -520,17 +505,13 @@ namespace YetAnotherUnityMcp.Editor.Net
                 
                 // Log the received handshake request
                 string message = Encoding.UTF8.GetString(buffer, 0, totalBytesRead);
-                Debug.Log($"[TCP Server] Received handshake request: '{message}' (length: {totalBytesRead})");
                 
                 // Log hex representation for binary analysis
                 string hexBytes = BitConverter.ToString(buffer, 0, totalBytesRead);
-                Debug.Log($"[TCP Server] Handshake bytes: {hexBytes}");
                 
                 // Send handshake response (as plain text, not framed)
                 byte[] response = Encoding.UTF8.GetBytes(HANDSHAKE_RESPONSE);
-                Debug.Log($"[TCP Server] Sending handshake response: '{HANDSHAKE_RESPONSE}' (length: {response.Length})");
                 string hexResponse = BitConverter.ToString(response);
-                Debug.Log($"[TCP Server] Response bytes: {hexResponse}");
                 
                 await stream.WriteAsync(response, 0, response.Length);
                 await stream.FlushAsync(); // Ensure the response is sent immediately
@@ -576,7 +557,7 @@ namespace YetAnotherUnityMcp.Editor.Net
                             // Only send ping if connected
                             if (connection.IsConnected && !linkedCts.Token.IsCancellationRequested)
                             {
-                                await connection.SendAsync(PING_MESSAGE);
+                                await connection.SendAsync(PING_MESSAGE, true);
                             }
                         }
                         catch (Exception ex)
@@ -591,7 +572,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                 {
                     try
                     {
-                        Debug.Log($"[TCP Server] Waiting for start marker (STX) from client {connection.Id}...");
                         
                         // Wait for the start marker (STX) using async method with timeout
                         int bytesChecked = 0;
@@ -633,7 +613,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                                         
                                         if (b == START_MARKER)
                                         {
-                                            Debug.Log($"[TCP Server] Found start marker (STX) after {bytesChecked} bytes");
                                             startMarkerFound = true;
                                             break;
                                         }
@@ -642,7 +621,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                                         if (bytesChecked % 10 == 0)
                                         {
                                             string hexInitial = BitConverter.ToString(initialBytes, 0, initialBytesCount);
-                                            Debug.Log($"[TCP Server] Checked {bytesChecked} bytes, no start marker yet. Initial bytes: {hexInitial}");
                                         }
                                         
                                         // Allow other tasks to run
@@ -685,7 +663,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                         // Message sanity check
                         if (messageLength <= 0 || messageLength > _bufferSize - 1)
                         {
-                            Debug.LogError($"[TCP Server] Invalid message length: {messageLength}");
                             continue;
                         }
                         
@@ -754,7 +731,12 @@ namespace YetAnotherUnityMcp.Editor.Net
                         if (message == PING_MESSAGE)
                         {
                             // Respond to ping with pong
-                            await connection.SendAsync(PONG_RESPONSE);
+                            await connection.SendAsync(PONG_RESPONSE, true);
+                            continue;
+                        }
+
+                        if (message == PONG_RESPONSE)
+                        {
                             continue;
                         }
                         
@@ -917,7 +899,7 @@ namespace YetAnotherUnityMcp.Editor.Net
         /// Send a message to this client
         /// </summary>
         /// <param name="message">Message to send</param>
-        public async Task SendAsync(string message)
+        public async Task SendAsync(string message, bool isProtocolMessage = false)
         {
             if (!IsConnected)
             {
@@ -946,17 +928,18 @@ namespace YetAnotherUnityMcp.Editor.Net
             // ETX marker
             frameBuffer[offset] = TcpServer.END_MARKER;
             
-            // Log the frame details for debugging
-            if (message.Length > 500)
+            if (!isProtocolMessage)
             {
-                Debug.Log($"[TCP Server] Message content (truncated): {message.Substring(0, 100)}... (total: {message.Length} bytes)");
+                // Log the frame details for debugging
+                if (message.Length > 500)
+                {
+                    Debug.Log($"[TCP Server] Message content (truncated): {message.Substring(0, 100)}... (total: {message.Length} bytes)");
+                }
+                else
+                {
+                    Debug.Log($"[TCP Server] Message content: {message} (total: {message.Length} bytes)");
+                }
             }
-            else
-            {
-                Debug.Log($"[TCP Server] Message content: {message} (total: {message.Length} bytes)");
-            }
-            
-            Debug.Log($"[TCP Server] Frame includes STX (0x{TcpServer.START_MARKER:X2}) at start and ETX (0x{TcpServer.END_MARKER:X2}) at end");
             
             // Write the entire frame as a single atomic operation with timeout
             NetworkStream stream = Client.GetStream();
@@ -973,8 +956,6 @@ namespace YetAnotherUnityMcp.Editor.Net
                     // Flush stream with timeout
                     var flushTask = stream.FlushAsync(timeoutCts.Token);
                     await flushTask;
-                    
-                    Debug.Log("[TCP Server] Message frame sent successfully");
                 }
             }
             catch (OperationCanceledException)

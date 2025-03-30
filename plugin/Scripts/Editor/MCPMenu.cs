@@ -63,19 +63,6 @@ namespace YetAnotherUnityMcp.Editor
             MCPWindow.ShowWindow();
         }
         
-        [MenuItem("MCP/Server/Log Performance Report")]
-        public static void LogPerformanceReport()
-        {
-            CommandExecutionMonitor.Instance.LogPerformanceReport();
-        }
-        
-        [MenuItem("MCP/Server/Reset Performance Metrics")]
-        public static void ResetPerformanceMetrics()
-        {
-            CommandExecutionMonitor.Instance.ClearMetrics();
-            Debug.Log("[MCP Menu] Performance metrics cleared");
-        }
-        
         [MenuItem("MCP/Server/Enable Auto-start")]
         public static void EnableAutoStart()
         {

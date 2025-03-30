@@ -259,19 +259,7 @@ namespace YetAnotherUnityMcp.Editor
                 EditorGUILayout.EndScrollView();
             }
             
-            // Performance monitor controls
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Log Performance Stats"))
-            {
-                CommandExecutionMonitor.Instance.LogPerformanceReport();
-            }
-            if (GUILayout.Button("Clear Stats"))
-            {
-                CommandExecutionMonitor.Instance.ClearMetrics();
-            }
-            EditorGUILayout.EndHorizontal();
-            
+        
             // Force refresh the UI periodically
             if (EditorApplication.timeSinceStartup % 1 < 0.016f)
             {

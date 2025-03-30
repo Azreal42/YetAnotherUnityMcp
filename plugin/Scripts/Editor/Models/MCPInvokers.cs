@@ -56,9 +56,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             var containerArgs = MapParameters(containerMethodParams, processedParams);
             
             // Invoke the method
-            Debug.Log($"[ResourceInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
             object result = methodInfo.Invoke(null, containerArgs);
-            Debug.Log($"[ResourceInvoker] Resource {resourceName} invoked successfully");
             
             return result;
         }
@@ -167,8 +165,6 @@ namespace YetAnotherUnityMcp.Editor.Models
             {
                 throw new ArgumentException($"Tool {toolDescriptor.Name} is not a method-based tool");
             }
-
-            Debug.Log($"[ToolInvoker] Using container method for tool: {toolDescriptor.Name}");
             
             // Get the method info
             var methodInfo = toolDescriptor.MethodInfo;
@@ -180,9 +176,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             
             
             // Invoke the method
-            Debug.Log($"[ToolInvoker] Invoking {containerType.Name}.{methodInfo.Name}");
             object result = methodInfo.Invoke(null, containerArgs);
-            Debug.Log($"[ToolInvoker] Tool {toolDescriptor.Name} invoked successfully");
             
             return result;
         }
