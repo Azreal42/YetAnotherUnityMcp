@@ -31,7 +31,9 @@ namespace YetAnotherUnityMcp.Editor.Commands
         /// </summary>
         /// <param name="code">The C# code to execute</param>
         /// <returns>Result of the execution</returns>
-        const string executeCodeExemple = "Execute C# code directly within Unity. Always try to use unity scripting api (fetch first documentation if needed)";
+        const string executeCodeExemple = "Execute C# code directly within Unity.\n"
+        +" Use this tool to interact and manipulate the unity editor/ecosystem, don't use it to create scripts that will be attached to a gameobject.\n" 
+        +" Always try to use unity scripting api (fetch first documentation if needed)";
 
         [MCPTool("execute_code", executeCodeExemple, executeCodeExemple)]
         public static string ExecuteCode([MCPParameter("code", "C# code that will be executed directly in Unity. It **must** contains a **static** `Execute` method that returns a string inside a class named `CodeExecutor` in YetAnotherUnityMcp.Runtime namespace", "string", true)] string code,

@@ -26,43 +26,7 @@ namespace YetAnotherUnityMcp.Editor.Models
                 throw new ArgumentException("Resource name cannot be null or empty");
             }
             
-            // Create a new dictionary to ensure we're working with a proper Dictionary<string, object>
-            Dictionary<string, object> processedParams = new Dictionary<string, object>();
-            
-            // Process the parameters, converting JObjects if needed
-            if (parameters != null)
-            {
-                foreach (var kvp in parameters)
-                {
-                    if (kvp.Value is Newtonsoft.Json.Linq.JObject jObject)
-                    {
-                        // Convert JObject to Dictionary<string, object>
-                        processedParams[kvp.Key] = jObject.ToObject<Dictionary<string, object>>();
-                        Debug.Log($"[ResourceInvoker] Converted JObject parameter '{kvp.Key}' to Dictionary");
-                    }
-                    else if (kvp.Value is Newtonsoft.Json.Linq.JArray jArray)
-                    {
-                        // Convert JArray to List<object>
-                        processedParams[kvp.Key] = jArray.ToObject<List<object>>();
-                        Debug.Log($"[ResourceInvoker] Converted JArray parameter '{kvp.Key}' to List");
-                    }
-                    else if (kvp.Value is Newtonsoft.Json.Linq.JValue jValue)
-                    {
-                        // Extract the raw value from JValue
-                        processedParams[kvp.Key] = jValue.Value;
-                        Debug.Log($"[ResourceInvoker] Extracted value from JValue parameter '{kvp.Key}'");
-                    }
-                    else
-                    {
-                        // Keep the original value
-                        processedParams[kvp.Key] = kvp.Value;
-                    }
-                }
-            }
-            else
-            {
-                processedParams = new Dictionary<string, object>();
-            }
+            var processedParams = parameters ?? new Dictionary<string, object>();
             
             Debug.Log($"[ResourceInvoker] Invoking resource: {resourceName} with parameters: {JsonConvert.SerializeObject(processedParams)}");
             
@@ -116,6 +80,10 @@ namespace YetAnotherUnityMcp.Editor.Models
             {
                 var paramInfo = methodParams[i];
                 string paramName = paramInfo.Name;
+
+                var mcpParameterAttribute = paramInfo.GetCustomAttributes(typeof(MCPParameterAttribute), false).FirstOrDefault() as MCPParameterAttribute;
+                if (mcpParameterAttribute != null)
+                    paramName = mcpParameterAttribute.Name;
                 
                 if (effectiveParams.TryGetValue(paramName, out object paramValue) && paramValue != null)
                 {
@@ -192,43 +160,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// <exception cref="ArgumentException">Thrown if tool not found or parameters invalid</exception>
         public static object InvokeTool(ToolDescriptor toolDescriptor, Dictionary<string, object> parameters)
         {            
-            // Create a new dictionary to ensure we're working with a proper Dictionary<string, object>
-            Dictionary<string, object> processedParams = new Dictionary<string, object>();
-            
-            // Process the parameters, converting JObjects if needed
-            if (parameters != null)
-            {
-                foreach (var kvp in parameters)
-                {
-                    if (kvp.Value is Newtonsoft.Json.Linq.JObject jObject)
-                    {
-                        // Convert JObject to Dictionary<string, object>
-                        processedParams[kvp.Key] = jObject.ToObject<Dictionary<string, object>>();
-                        Debug.Log($"[ToolInvoker] Converted JObject parameter '{kvp.Key}' to Dictionary");
-                    }
-                    else if (kvp.Value is Newtonsoft.Json.Linq.JArray jArray)
-                    {
-                        // Convert JArray to List<object>
-                        processedParams[kvp.Key] = jArray.ToObject<List<object>>();
-                        Debug.Log($"[ToolInvoker] Converted JArray parameter '{kvp.Key}' to List");
-                    }
-                    else if (kvp.Value is Newtonsoft.Json.Linq.JValue jValue)
-                    {
-                        // Extract the raw value from JValue
-                        processedParams[kvp.Key] = jValue.Value;
-                        Debug.Log($"[ToolInvoker] Extracted value from JValue parameter '{kvp.Key}'");
-                    }
-                    else
-                    {
-                        // Keep the original value
-                        processedParams[kvp.Key] = kvp.Value;
-                    }
-                }
-            }
-            else
-            {
-                processedParams = new Dictionary<string, object>();
-            }
+            var processedParams = parameters ?? new Dictionary<string, object>();
             
             // Check if this is a method-based tool
             if (toolDescriptor.MethodInfo == null || toolDescriptor.ContainerType == null)
