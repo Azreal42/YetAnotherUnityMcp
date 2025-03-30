@@ -4,7 +4,7 @@ import pytest
 import asyncio
 import logging
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Sequence
 import sys
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -444,6 +444,36 @@ class TestDynamicTools:
         
         # Verify result has expected structure
         assert isinstance(result, dict), "Result is not a dictionary"
+
+        from mcp.server.fastmcp.server import _convert_to_content
+        converted_result = self._convert_to_content(result)
+        print(converted_result)
+
+    @staticmethod
+    def _convert_to_content(result: Any) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+        from itertools import chain
+        from mcp.server.fastmcp.utilities.types import Image
+        import pydantic_core
+        """Convert a result to a sequence of content objects."""
+        if result is None:
+            return []
+
+        if isinstance(result, (TextContent, ImageContent, EmbeddedResource)):
+            return [result]
+
+        if isinstance(result, Image):
+            return [result.to_image_content()]
+
+        if isinstance(result, (list, tuple)):
+            return list(chain.from_iterable(TestDynamicTools._convert_to_content(item) for item in result))
+
+        if not isinstance(result, str):
+            try:
+                result = json.dumps(pydantic_core.to_jsonable_python(result))
+            except Exception:
+                result = str(result)
+
+        return [TextContent(type="text", text=result)]    
     
     async def test_resource_invocation(self, connected_client, mcp_test_instance):
         """Test invoking dynamic resources"""
@@ -675,6 +705,7 @@ class TestDynamicTools:
         assert result is not None, "Error handling returned None"
         logger.info(f"Non-existent resource result: {json.dumps(result, indent=2)}")
     
+
     def _generate_test_value(self, param_name: str) -> Any:
         """Generate a test value based on parameter name"""
         # Convert to lowercase for comparison
@@ -810,6 +841,8 @@ class TestDynamicToolsMocked:
         client.disconnect = AsyncMock(return_value=None)
         
         return client
+    
+    
     
     def _mock_send_command(self, command: str, params: Dict[str, Any]):
         """Mock the send_command method based on the command and parameters"""

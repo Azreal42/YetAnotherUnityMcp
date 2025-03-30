@@ -401,31 +401,26 @@ namespace YetAnotherUnityMcp.Editor.Tests
             MCPResponse response = new MCPResponse();
             
             // Add text content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new TextContentItem 
             { 
                 Type = "text", 
                 Text = textContent 
             });
             
             // Add image content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new ImageContent
             { 
                 Type = "image", 
-                Image = new ImageContent 
-                { 
-                    Url = imageUrl, 
-                    MimeType = "image/jpeg" 
-                } 
+                
+                Url = imageUrl, 
+                MimeType = "image/jpeg" 
             });
             
             // Add embedded content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new EmbeddedContent
             { 
                 Type = "embedded", 
-                Embedded = new EmbeddedContent 
-                { 
-                    ResourceUri = resourceUri 
-                } 
+                ResourceUri = resourceUri 
             });
             
             // Convert to JSON and parse back

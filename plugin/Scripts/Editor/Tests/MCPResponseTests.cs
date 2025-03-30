@@ -26,7 +26,10 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Assert
             Assert.AreEqual(1, response.Content.Count, "Should have one content item");
             Assert.AreEqual("text", response.Content[0].Type, "Content type should be text");
-            Assert.AreEqual(testMessage, response.Content[0].Text, "Text content should match");
+
+            var textContent = response.Content[0] as TextContentItem;
+            Assert.IsNotNull(textContent, "Content should be of type TextContentItem");
+            Assert.AreEqual(testMessage, textContent.Text, "Text content should match");
             Assert.IsFalse(response.IsError, "Should not be an error response");
         }
         
@@ -42,7 +45,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Assert
             Assert.AreEqual(1, response.Content.Count, "Should have one content item");
             Assert.AreEqual("text", response.Content[0].Type, "Content type should be text");
-            Assert.AreEqual(errorMessage, response.Content[0].Text, "Text content should match");
+
+            var textContent = response.Content[0] as TextContentItem;
+            Assert.AreEqual(errorMessage, textContent.Text, "Text content should match");
             Assert.IsTrue(response.IsError, "Should be an error response");
         }
         
@@ -59,10 +64,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Assert
             Assert.AreEqual(1, response.Content.Count, "Should have one content item");
             Assert.AreEqual("image", response.Content[0].Type, "Content type should be image");
-            Assert.IsNull(response.Content[0].Text, "Text should be null");
-            Assert.IsNotNull(response.Content[0].Image, "Image should not be null");
-            Assert.AreEqual(imageUrl, response.Content[0].Image.Url, "Image URL should match");
-            Assert.AreEqual(mimeType, response.Content[0].Image.MimeType, "MIME type should match");
+            var imageContent = response.Content[0] as ImageContent;
+            Assert.AreEqual(imageUrl, imageContent.Url, "Image URL should match");
+            Assert.AreEqual(mimeType, imageContent.MimeType, "MIME type should match");
             Assert.IsFalse(response.IsError, "Should not be an error response");
         }
         
@@ -78,10 +82,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             // Assert
             Assert.AreEqual(1, response.Content.Count, "Should have one content item");
             Assert.AreEqual("embedded", response.Content[0].Type, "Content type should be embedded");
-            Assert.IsNull(response.Content[0].Text, "Text should be null");
-            Assert.IsNull(response.Content[0].Image, "Image should be null");
-            Assert.IsNotNull(response.Content[0].Embedded, "Embedded should not be null");
-            Assert.AreEqual(resourceUri, response.Content[0].Embedded.ResourceUri, "Resource URI should match");
+            var embeddedContent = response.Content[0] as EmbeddedContent;
+            Assert.IsNotNull(embeddedContent, "Embedded should not be null");
+            Assert.AreEqual(resourceUri, embeddedContent.ResourceUri, "Resource URI should match");
             Assert.IsFalse(response.IsError, "Should not be an error response");
         }
         
@@ -126,7 +129,9 @@ namespace YetAnotherUnityMcp.Editor.Tests
             Assert.IsNotNull(response, "Response should not be null");
             Assert.AreEqual(1, response.Content.Count, "Should have one content item");
             Assert.AreEqual("text", response.Content[0].Type, "Content type should be text");
-            Assert.AreEqual("Test message", response.Content[0].Text, "Text content should match");
+
+            var textContent = response.Content[0] as TextContentItem;
+            Assert.AreEqual("Test message", textContent.Text, "Text content should match");
             Assert.IsFalse(response.IsError, "Should not be an error response");
         }
         
@@ -137,21 +142,19 @@ namespace YetAnotherUnityMcp.Editor.Tests
             MCPResponse response = new MCPResponse();
             
             // Add text content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new TextContentItem 
             { 
                 Type = "text", 
                 Text = "Text content" 
             });
             
             // Add image content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new ImageContent 
             { 
                 Type = "image", 
-                Image = new ImageContent 
-                { 
-                    Url = "https://example.com/image.jpg", 
-                    MimeType = "image/jpeg" 
-                } 
+    
+                Url = "https://example.com/image.jpg", 
+                MimeType = "image/jpeg" 
             });
             
             // Act
@@ -170,8 +173,8 @@ namespace YetAnotherUnityMcp.Editor.Tests
         public void ContentItem_NullHandling_Serialization()
         {
             // Arrange
-            ContentItem textItem = new ContentItem { Type = "text", Text = "Text content" };
-            ContentItem imageItem = new ContentItem { Type = "image", Image = new ImageContent { Url = "http://example.com/img.png", MimeType = "image/png" } };
+            TextContentItem textItem = new TextContentItem { Type = "text", Text = "Text content" };
+            ImageContent imageItem = new ImageContent { Type = "image", Url = "http://example.com/img.png", MimeType = "image/png" };
             
             // Act
             string textJson = JsonConvert.SerializeObject(textItem);
@@ -237,21 +240,19 @@ namespace YetAnotherUnityMcp.Editor.Tests
             MCPResponse response = new MCPResponse();
             
             // Add text content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new TextContentItem 
             { 
                 Type = "text", 
                 Text = "Text portion of the response" 
             });
             
             // Add image content
-            response.Content.Add(new ContentItem 
+            response.Content.Add(new ImageContent
             { 
                 Type = "image", 
-                Image = new ImageContent 
-                { 
-                    Url = "https://example.com/image.png", 
-                    MimeType = "image/png" 
-                } 
+                 
+                Url = "https://example.com/image.png", 
+                MimeType = "image/png" 
             });
             
             // Serialize to JSON

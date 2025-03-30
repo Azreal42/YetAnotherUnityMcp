@@ -54,6 +54,29 @@ class UnityClientUtil:
                     if ctx:
                         await ctx.debug(f"MCP content types: {content_types}")
                     logger.debug(f"MCP content types: {content_types}")
+
+                    from mcp.types import TextContent, ImageContent, EmbeddedResource
+                    # convert the content to the correct type
+                    converted_content = []
+                    for item in content:
+                        if item.get("type") == "text":
+                            converted_content.append(TextContent(
+                                type="text",
+                                text=item["text"], 
+                                annotations=item["annotations"] if "annotations" in item else None))
+                        elif item.get("type") == "image":
+                            converted_content.append(ImageContent(
+                                type="image",
+                                data=item["data"], 
+                                mimeType=item["mimeType"],
+                                annotations=item["annotations"] if "annotations" in item else None))
+                        elif item.get("type") == "embedded_resource":
+                            converted_content.append(EmbeddedResource(
+                                type="resource",
+                                resource=item["resource"],
+                                annotations=item["annotations"] if "annotations" in item else None,
+                            ))
+                    result = converted_content
             
             return result
         

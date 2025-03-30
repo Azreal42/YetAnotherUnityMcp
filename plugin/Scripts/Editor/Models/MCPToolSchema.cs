@@ -77,38 +77,30 @@ namespace YetAnotherUnityMcp.Editor.Models
     /// Represents a content item in an MCP response
     /// </summary>
     [Serializable]
-    public class ContentItem
+    public class BaseContentItem
     {
         /// <summary>
         /// Type of content in this item
         /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
-        
+    }
+
+    [Serializable]
+    public class TextContentItem : BaseContentItem
+    {
         /// <summary>
         /// Text content (for type = "text")
         /// </summary>
         [JsonProperty("text", NullValueHandling = NullValueHandling.Ignore)]
         public string Text { get; set; }
-        
-        /// <summary>
-        /// Image content (for type = "image")
-        /// </summary>
-        [JsonProperty("image", NullValueHandling = NullValueHandling.Ignore)]
-        public ImageContent Image { get; set; }
-        
-        /// <summary>
-        /// Embedded content (for type = "embedded")
-        /// </summary>
-        [JsonProperty("embedded", NullValueHandling = NullValueHandling.Ignore)]
-        public EmbeddedContent Embedded { get; set; }
     }
     
     /// <summary>
     /// Represents image content in an MCP response
     /// </summary>
     [Serializable]
-    public class ImageContent
+    public class ImageContent : BaseContentItem
     {
         /// <summary>
         /// URL of the image
@@ -133,7 +125,7 @@ namespace YetAnotherUnityMcp.Editor.Models
     /// Represents embedded content in an MCP response
     /// </summary>
     [Serializable]
-    public class EmbeddedContent
+    public class EmbeddedContent : BaseContentItem
     {
         /// <summary>
         /// Resource URI for the embedded content
@@ -152,7 +144,7 @@ namespace YetAnotherUnityMcp.Editor.Models
         /// Content items in the response
         /// </summary>
         [JsonProperty("content")]
-        public List<ContentItem> Content { get; set; } = new List<ContentItem>();
+        public List<BaseContentItem> Content { get; set; } = new List<BaseContentItem>();
         
         /// <summary>
         /// Whether this response represents an error
@@ -170,9 +162,9 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             return new MCPResponse
             {
-                Content = new List<ContentItem>
+                Content = new List<BaseContentItem>
                 {
-                    new ContentItem
+                    new TextContentItem
                     {
                         Type = "text",
                         Text = text
@@ -192,16 +184,13 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             return new MCPResponse
             {
-                Content = new List<ContentItem>
+                Content = new List<BaseContentItem>
                 {
-                    new ContentItem
+                    new ImageContent
                     {
                         Type = "image",
-                        Image = new ImageContent
-                        {
-                            Url = imageUrl,
-                            MimeType = mimeType
-                        }
+                        Url = imageUrl,
+                        MimeType = mimeType
                     }
                 },
                 IsError = false
@@ -219,16 +208,13 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             var response = new MCPResponse
             {
-                Content = new List<ContentItem>
+                Content = new List<BaseContentItem>
                 {
-                    new ContentItem
+                    new ImageContent
                     {
                         Type = "image",
-                        Image = new ImageContent
-                        {
-                            Data = base64Data,
-                            MimeType = mimeType
-                        }
+                        Data = base64Data,
+                        MimeType = mimeType
                     }
                 },
                 IsError = false
@@ -237,7 +223,7 @@ namespace YetAnotherUnityMcp.Editor.Models
             // Add caption if provided
             if (!string.IsNullOrEmpty(caption))
             {
-                response.Content.Add(new ContentItem
+                response.Content.Add(new TextContentItem
                 {
                     Type = "text",
                     Text = caption
@@ -256,15 +242,12 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             return new MCPResponse
             {
-                Content = new List<ContentItem>
+                Content = new List<BaseContentItem>
                 {
-                    new ContentItem
+                    new EmbeddedContent
                     {
                         Type = "embedded",
-                        Embedded = new EmbeddedContent
-                        {
-                            ResourceUri = resourceUri
-                        }
+                        ResourceUri = resourceUri
                     }
                 },
                 IsError = false
@@ -280,9 +263,9 @@ namespace YetAnotherUnityMcp.Editor.Models
         {
             return new MCPResponse
             {
-                Content = new List<ContentItem>
+                Content = new List<BaseContentItem>
                 {
-                    new ContentItem
+                    new TextContentItem
                     {
                         Type = "text",
                         Text = errorMessage
