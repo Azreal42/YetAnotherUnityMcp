@@ -13,6 +13,7 @@ using Microsoft.CSharp;
 using Newtonsoft.Json;
 using YetAnotherUnityMcp.Editor.Models;
 using System.Collections;
+using UnityEditor.TestTools.TestRunner.Api;
 
 namespace YetAnotherUnityMcp.Editor.Commands
 {
@@ -24,59 +25,21 @@ namespace YetAnotherUnityMcp.Editor.Commands
     {
         #region Code Execution
 
-        private const string ClassTemplate = @"
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.SceneManagement;
-using UnityEditor;
-using Object = UnityEngine.Object;
-{1}
-
-namespace YetAnotherUnityMcp.Runtime
-{{
-    public class CodeExecutor
-    {{
-        public static object Execute()
-        {{
-            try
-            {{
-                {0}
-            }}
-            catch (Exception ex)
-            {{
-                return $""Error: {{ex.Message}}\nStackTrace: {{ex.StackTrace}}"";
-            }}
-            
-            return ""Code executed successfully"";
-        }}
-    }}
-}}";
 
         /// <summary>
         /// Execute C# code in the Unity Editor
         /// </summary>
         /// <param name="code">The C# code to execute</param>
         /// <returns>Result of the execution</returns>
-        const string executeCodeExemple = 
-            "editor_execute_code(\"Debug.Log(\\\"Hello from AI\\\"); return 42;\")\n" +
-            "editor_execute_code(code=\"Debug.Log(\\\"Hello from AI\\\"); return 42;\",\n" +
-            "                    additional_using=[\"Newtonsoft.Json.Linq\", \"System.IO\"],\n" +
-            "                    additional_assemblies=[\"UnityEngine.PhysicsModule\", \"UnityEngine.UI\"])\n";
+        const string executeCodeExemple = "Execute C# code directly within Unity. Always try to use unity scripting api (fetch first documentation if needed)";
 
-        [MCPTool("execute_code", "Execute C# code in Unity", "executeCodeExemple")]
-        public static string ExecuteCode([MCPParameter("code", "C# code to execute in the Unity environment", "string", true)] string code,
-                                         [MCPParameter("additional_using", "Additional references to add to the compilation", "string", false)] List<string> additionalUsings = null,
-                                         [MCPParameter("additional_assemblies", "Additional assemblies to add to the compilation", "string", false)] List<string> additionalAssemblies = null)
+        [MCPTool("execute_code", executeCodeExemple, executeCodeExemple)]
+        public static string ExecuteCode([MCPParameter("code", "C# code that will be executed directly in Unity. It **must** contains a **static** `Execute` method that returns a string inside a class named `CodeExecutor` in YetAnotherUnityMcp.Runtime namespace", "string", true)] string code,
+                                         [MCPParameter("additional_assemblies", "Additional assemblies to add at compilation", "string", false)] List<string> additionalAssemblies = null)                                         
         {
             try
             {
                 StringBuilder result = new StringBuilder();
-                // Prepare the code
-                string codeToCompile = string.Format(ClassTemplate, code, additionalUsings);
                 
                 // Create compiler parameters
                 var parameters = new System.CodeDom.Compiler.CompilerParameters
@@ -85,7 +48,6 @@ namespace YetAnotherUnityMcp.Runtime
                     GenerateExecutable = false
                 };
 
-            
                 // Add references to Unity assemblies
                 var assemblies = new List<string>() {
                     typeof(UnityEngine.Object).Assembly.Location,
@@ -93,8 +55,22 @@ namespace YetAnotherUnityMcp.Runtime
                     typeof(Debug).Assembly.Location,
                     typeof(EditorWindow).Assembly.Location,
                     typeof(UnityEditor.Editor).Assembly.Location,
+                    typeof(Rigidbody).Assembly.Location,
+                    typeof(Collider).Assembly.Location,
+                    typeof(Collision).Assembly.Location,
+                    typeof(Rigidbody2D).Assembly.Location,
+                    typeof(Collider2D).Assembly.Location,
+                    typeof(Collision2D).Assembly.Location,
+                    typeof(Transform).Assembly.Location,
+                    typeof(Camera).Assembly.Location,
+                    typeof(Light).Assembly.Location,
+                    typeof(AudioSource).Assembly.Location,
+                    typeof(AudioListener).Assembly.Location,
+                    typeof(AudioClip).Assembly.Location,
+                    typeof(TestRunnerApi).Assembly.Location,
                     FindUnityModule("System.Core"),
                     FindUnityModule("netstandard"),
+                    FindUnityModule("AudioManager"),
                     FindUnityModule("UnityEngine.UI"),
                     FindUnityModule("UnityEngine.CoreModule"),
                     FindUnityModule("UnityEngine.UIModule"),
@@ -125,7 +101,7 @@ namespace YetAnotherUnityMcp.Runtime
                 
                 // Compile the code
                 using CSharpCodeProvider provider = new CSharpCodeProvider();
-                CompilerResults results = provider.CompileAssemblyFromSource(parameters, codeToCompile);
+                CompilerResults results = provider.CompileAssemblyFromSource(parameters, code);
                 
                 // Check for compilation errors
                 if (results.Errors.HasErrors)
